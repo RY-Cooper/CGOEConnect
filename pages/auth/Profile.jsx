@@ -30,6 +30,7 @@ export default function Profile() {
   const [picFile, setPicFile]         = useState(null);
   const [picPreview, setPicPreview]   = useState(currentUser?.profilePic ?? "");
   const [saving, setSaving]           = useState(false);
+  const [saveError, setSaveError]     = useState(null);
   const picRef                        = useRef(null);
   const previewPic = picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
 
@@ -43,11 +44,14 @@ export default function Profile() {
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
+    setSaveError(null);
     try {
       let picUrl = picPreview;
       if (picFile) picUrl = await uploadImage(picFile);
       await updateProfile({ displayName, bio, profilePic: picUrl || undefined, timezone });
       navigate("/", { replace: true });
+    } catch (err) {
+      setSaveError(err.message || "Save failed — check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -73,9 +77,14 @@ export default function Profile() {
       <div className="mx-auto max-w-lg px-4 py-10">
         <div className="rounded-2xl bg-white p-8 shadow-lg border border-stone-200">
           <h1 className="text-2xl font-semibold text-stone-900 mb-1">Your profile</h1>
-          <p className="text-sm text-stone-500 mb-8">
+          <p className="text-sm text-stone-500 mb-4">
             Visible to classmates in hubs and threads.
           </p>
+          {saveError && (
+            <div className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+              {saveError}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
 

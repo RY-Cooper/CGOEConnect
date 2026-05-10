@@ -223,10 +223,7 @@ function MessageCard({
   replies, onAddReply, isChatModerator, onDelete,
 }) {
   const isHelpful = msg.markedHelpfulBy?.includes(currentUser?.id);
-  // Use live timezone for current user's own messages (reflects Profile edits)
-  const authorTz = msg.authorId === currentUser?.id
-    ? (currentUser?.timezone || author?.timezone)
-    : author?.timezone;
+  const authorTz = msg.author_id === currentUser?.id ? currentUser?.timezone : null;
   const tzAbbr = getTzAbbr(authorTz);
   const [showReplies, setShowReplies] = useState(false);
   const [newReply, setNewReply] = useState("");
@@ -455,6 +452,7 @@ function Composer({ onSubmit, currentUser }) {
   const [imgPreview, setImgPreview] = useState(null);
   const [imgUrl, setImgUrl]         = useState(null);
   const [imgUploading, setImgUploading] = useState(false);
+  const [imgError, setImgError]     = useState(null);
   const [showPoll, setShowPoll] = useState(false);
   const [pollQ, setPollQ] = useState("");
   const [pollOpts, setPollOpts] = useState(["", ""]);
@@ -467,12 +465,14 @@ function Composer({ onSubmit, currentUser }) {
     if (!file) return;
     setImgPreview(URL.createObjectURL(file));
     setImgUrl(null);
+    setImgError(null);
     setImgUploading(true);
     try {
       const url = await uploadImage(file);
       setImgUrl(url);
-    } catch {
+    } catch (err) {
       setImgPreview(null);
+      setImgError(err.message || "Image upload failed — check your connection and try again.");
     } finally {
       setImgUploading(false);
     }
@@ -535,6 +535,11 @@ function Composer({ onSubmit, currentUser }) {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      {imgError && (
+        <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+          {imgError}
+        </div>
+      )}
       <div className="mb-3 flex flex-wrap gap-1.5">
         {TAG_OPTIONS.map((t) => (
           <button
