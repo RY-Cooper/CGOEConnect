@@ -363,7 +363,7 @@ function MessageCard({
                 )}
               </div>
 
-              {isChatModerator && (
+              {(isChatModerator || msg.author_id === currentUser?.id) && (
                 <button
                   type="button"
                   onClick={() => onDelete(msg.id)}
@@ -446,7 +446,7 @@ function MessageCard({
 
 // ── Composer ────────────────────────────────────────────────────────────────
 
-function Composer({ onSubmit, currentUser }) {
+function Composer({ onSubmit, currentUser, simple = false }) {
   const [text, setText] = useState("");
   const [tag, setTag] = useState("General");
   const [imgPreview, setImgPreview] = useState(null);
@@ -540,19 +540,21 @@ function Composer({ onSubmit, currentUser }) {
           {imgError}
         </div>
       )}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {TAG_OPTIONS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTag(t)}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors
-              ${tag === t ? `${tagStyle(t)} ring-1 ring-offset-1 ring-current` : "border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100"}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {!simple && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {TAG_OPTIONS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTag(t)}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors
+                ${tag === t ? `${tagStyle(t)} ring-1 ring-offset-1 ring-current` : "border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <img
@@ -681,6 +683,7 @@ function Composer({ onSubmit, currentUser }) {
           Image
         </label>
 
+        {!simple && (
         <button
           type="button"
           onClick={() => { setShowPoll((p) => !p); setShowSched(false); }}
@@ -692,7 +695,9 @@ function Composer({ onSubmit, currentUser }) {
           </svg>
           Poll
         </button>
+        )}
 
+        {!simple && (
         <button
           type="button"
           onClick={() => { setShowSched((p) => !p); setShowPoll(false); }}
@@ -705,6 +710,7 @@ function Composer({ onSubmit, currentUser }) {
           </svg>
           Schedule
         </button>
+        )}
 
         <button
           type="submit"
@@ -723,7 +729,7 @@ function Composer({ onSubmit, currentUser }) {
 
 // ── ChatThread (exported) ────────────────────────────────────────────────────
 
-export default function ChatThread({ chatId, chatObj }) {
+export default function ChatThread({ chatId, chatObj, simple = false }) {
   const { currentUser } = useAuth();
 
   const [chat, setChat]   = useState(chatObj ?? null);
@@ -983,7 +989,7 @@ export default function ChatThread({ chatId, chatObj }) {
       )}
 
       <div className="mt-2">
-        <Composer onSubmit={handleNewPost} currentUser={currentUser} />
+        <Composer onSubmit={handleNewPost} currentUser={currentUser} simple={simple} />
       </div>
     </div>
   );

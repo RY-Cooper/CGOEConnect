@@ -1,7 +1,9 @@
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { classesAPI } from "../../api";
 import { uploadImage } from "../../utils/cloudinary";
+import { IDENTITY_TAGS, STUDENT_STATUSES, MODALITY_TAGS } from "./Register";
 import TopNav from "../../components/TopNav";
 
 const TIMEZONES = [
@@ -22,17 +24,33 @@ const TIMEZONES = [
 ];
 
 export default function Profile() {
-  const { currentUser, updateProfile } = useAuth();
+  const { currentUser, updateProfile, setSelectedClassIds } = useAuth();
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState(currentUser?.name ?? "");
-  const [bio, setBio]                 = useState(currentUser?.bio ?? "");
-  const [timezone, setTimezone]       = useState(currentUser?.timezone ?? "");
-  const [picFile, setPicFile]         = useState(null);
-  const [picPreview, setPicPreview]   = useState(currentUser?.profilePic ?? "");
-  const [saving, setSaving]           = useState(false);
-  const [saveError, setSaveError]     = useState(null);
-  const picRef                        = useRef(null);
+
+  const [displayName,   setDisplayName]   = useState(currentUser?.name ?? "");
+  const [bio,           setBio]           = useState(currentUser?.bio ?? "");
+  const [timezone,      setTimezone]      = useState(currentUser?.timezone ?? "");
+  const [identityTags,  setIdentityTags]  = useState(currentUser?.identityTags ?? []);
+  const [studentStatus, setStudentStatus] = useState(currentUser?.studentStatus ?? "");
+  const [modalityTags,  setModalityTags]  = useState(currentUser?.modalityTags ?? []);
+  const [classIds,      setClassIds]      = useState(currentUser?.classes ?? []);
+  const [catalogClasses, setCatalogClasses] = useState([]);
+  const [picFile,       setPicFile]       = useState(null);
+  const [picPreview,    setPicPreview]    = useState(currentUser?.profilePic ?? "");
+  const [saving,        setSaving]        = useState(false);
+  const [saveError,     setSaveError]     = useState(null);
+  const picRef = useRef(null);
+
   const previewPic = picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
+
+  const catalogSorted = useMemo(
+    () => [...catalogClasses].sort((a, b) => a.name.localeCompare(b.name)),
+    [catalogClasses]
+  );
+
+  useEffect(() => {
+    classesAPI.list().then(({ classes }) => setCatalogClasses(classes)).catch(() => {});
+  }, []);
 
   function handlePicPick(e) {
     const file = e.target.files?.[0];
@@ -41,6 +59,18 @@ export default function Profile() {
     setPicPreview(URL.createObjectURL(file));
   }
 
+  function toggleIdentity(tag) {
+    setIdentityTags((p) => p.includes(tag) ? p.filter((t) => t !== tag) : [...p, tag]);
+  }
+  function toggleModality(tag) {
+    setModalityTags((p) => p.includes(tag) ? p.filter((t) => t !== tag) : [...p, tag]);
+  }
+  function toggleClass(id) {
+    setClassIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  }
+
+  const tzLabel = TIMEZONES.find((t) => t.value === timezone)?.label;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
@@ -48,7 +78,14 @@ export default function Profile() {
     try {
       let picUrl = picPreview;
       if (picFile) picUrl = await uploadImage(picFile);
-      await updateProfile({ displayName, bio, profilePic: picUrl || undefined, timezone });
+      await updateProfile({
+        displayName, bio, timezone,
+        profilePic:   picUrl || undefined,
+        identityTags,
+        studentStatus,
+        modalityTags,
+      });
+      await setSelectedClassIds(classIds);
       navigate("/", { replace: true });
     } catch (err) {
       setSaveError(err.message || "Save failed — check your connection and try again.");
@@ -59,17 +96,11 @@ export default function Profile() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center" role="status" aria-label="Loading">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
       </div>
     );
   }
-
-  const identityTags  = currentUser.identityTags ?? [];
-  const modalityTags  = currentUser.modalityTags ?? [];
-  const studentStatus = currentUser.studentStatus;
-
-  const tzLabel = TIMEZONES.find((t) => t.value === timezone)?.label;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -77,9 +108,8 @@ export default function Profile() {
       <div className="mx-auto max-w-lg px-4 py-10">
         <div className="rounded-2xl bg-white p-8 shadow-lg border border-stone-200">
           <h1 className="text-2xl font-semibold text-stone-900 mb-1">Your profile</h1>
-          <p className="text-sm text-stone-500 mb-4">
-            Visible to classmates in hubs and threads.
-          </p>
+          <p className="text-sm text-stone-500 mb-4">Visible to classmates in hubs and threads.</p>
+
           {saveError && (
             <div className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
               {saveError}
@@ -118,33 +148,9 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Tags */}
-            <div>
-              <p className="block text-sm font-medium text-stone-700 mb-2">Your tags</p>
-              <div className="flex flex-wrap gap-2">
-                {identityTags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-[#8C1515]/10 px-3 py-1 text-xs font-semibold text-[#8C1515]">
-                    {tag}
-                  </span>
-                ))}
-                {studentStatus && (
-                  <span className="rounded-full bg-stone-200 px-3 py-1 text-xs font-semibold capitalize text-stone-800">
-                    {studentStatus}
-                  </span>
-                )}
-                {modalityTags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium capitalize text-stone-700">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-
             {/* Display name */}
             <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-stone-700 mb-1">
-                Display name
-              </label>
+              <label htmlFor="displayName" className="block text-sm font-medium text-stone-700 mb-1">Display name</label>
               <input
                 id="displayName"
                 value={displayName}
@@ -156,12 +162,10 @@ export default function Profile() {
 
             {/* Bio */}
             <div>
-              <label htmlFor="bio" className="block text-sm font-medium text-stone-700 mb-1">
-                Bio
-              </label>
+              <label htmlFor="bio" className="block text-sm font-medium text-stone-700 mb-1">Bio</label>
               <textarea
                 id="bio"
-                rows={4}
+                rows={3}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 className="w-full rounded-lg border border-stone-300 px-3 py-2 text-stone-900 shadow-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25 resize-y"
@@ -169,11 +173,76 @@ export default function Profile() {
               />
             </div>
 
+            {/* Program & pathway tags */}
+            <fieldset>
+              <legend className="block text-sm font-medium text-stone-700 mb-2">Program &amp; pathway</legend>
+              <div className="flex flex-wrap gap-2">
+                {IDENTITY_TAGS.map((tag) => {
+                  const on = identityTags.includes(tag);
+                  return (
+                    <button key={tag} type="button" onClick={() => toggleIdentity(tag)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${on ? "bg-[#8C1515] text-white shadow" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}>
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {/* Student status */}
+            <fieldset>
+              <legend className="block text-sm font-medium text-stone-700 mb-2">Where are you in your journey?</legend>
+              <div className="flex flex-wrap gap-2">
+                {STUDENT_STATUSES.map((s) => (
+                  <button key={s} type="button" onClick={() => setStudentStatus(s)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${studentStatus === s ? "bg-[#8C1515] text-white shadow" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Modality tags */}
+            <fieldset>
+              <legend className="block text-sm font-medium text-stone-700 mb-2">Schedule &amp; format</legend>
+              <div className="flex flex-wrap gap-2">
+                {MODALITY_TAGS.map((tag) => {
+                  const on = modalityTags.includes(tag);
+                  return (
+                    <button key={tag} type="button" onClick={() => toggleModality(tag)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${on ? "bg-stone-800 text-white shadow" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}>
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {/* Classes */}
+            <div>
+              <p className="block text-sm font-medium text-stone-700 mb-2">Your classes</p>
+              {catalogSorted.length === 0 ? (
+                <p className="text-xs text-stone-400">No classes in the catalog yet — ask your admin to add some.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-stone-200 divide-y divide-stone-100">
+                  {catalogSorted.map((c) => (
+                    <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-stone-50">
+                      <input
+                        type="checkbox"
+                        checked={classIds.includes(c.id)}
+                        onChange={() => toggleClass(c.id)}
+                        className="rounded border-stone-300 text-[#8C1515] focus:ring-[#8C1515]"
+                      />
+                      <span className="text-sm text-stone-900">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Timezone */}
             <div>
-              <label htmlFor="timezone" className="block text-sm font-medium text-stone-700 mb-1">
-                Time zone
-              </label>
+              <label htmlFor="timezone" className="block text-sm font-medium text-stone-700 mb-1">Time zone</label>
               <div className="relative">
                 <select
                   id="timezone"
@@ -183,26 +252,16 @@ export default function Profile() {
                 >
                   <option value="">— Not set —</option>
                   {TIMEZONES.map((tz) => (
-                    <option key={tz.value} value={tz.value}>
-                      {tz.label}
-                    </option>
+                    <option key={tz.value} value={tz.value}>{tz.label}</option>
                   ))}
                 </select>
-                <svg
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                >
+                <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" d="M19 9l-7 7-7-7"/>
                 </svg>
               </div>
-              {timezone && (
-                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-stone-500">
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <circle cx="12" cy="12" r="10"/>
-                    <path strokeLinecap="round" d="M12 6v6l4 2"/>
-                  </svg>
-                  Showing as: <span className="font-medium text-stone-700">{tzLabel}</span>
-                </p>
+              {timezone && tzLabel && (
+                <p className="mt-1.5 text-xs text-stone-500">Showing as: <span className="font-medium text-stone-700">{tzLabel}</span></p>
               )}
             </div>
 

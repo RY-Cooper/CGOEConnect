@@ -54,7 +54,7 @@ export default function GeneralChat() {
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
           </div>
         ) : chatId ? (
-          <ChatThread chatId={chatId} />
+          <ChatThread chatId={chatId} simple />
         ) : (
           <p className="text-center text-sm text-stone-500 py-12">General chat not available.</p>
         )}
