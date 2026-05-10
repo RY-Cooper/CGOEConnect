@@ -1,10 +1,10 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
-const requireModerator = require('../middleware/requireModerator');
+const requireAdmin = require('../middleware/requireAdmin');
 
-// POST /api/classes — moderator only
-router.post('/', auth, requireModerator, async (req, res, next) => {
+// POST /api/classes — admin only
+router.post('/', auth, requireAdmin, async (req, res, next) => {
   const { id, name, programs } = req.body;
   if (!id || !name) return res.status(400).json({ error: 'id and name are required' });
   try {
@@ -100,7 +100,7 @@ router.delete('/:classId/resources/:id', auth, async (req, res, next) => {
   try {
     const { rows: [r] } = await db.query('SELECT * FROM resources WHERE id = $1', [req.params.id]);
     if (!r) return res.status(404).json({ error: 'Resource not found' });
-    if (r.uploaded_by !== req.user.id && req.user.role !== 'moderator') {
+    if (r.uploaded_by !== req.user.id && req.user.role !== 'moderator' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
     await db.query('DELETE FROM resources WHERE id = $1', [req.params.id]);

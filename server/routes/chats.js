@@ -42,7 +42,7 @@ router.get('/:chatId/messages', auth, async (req, res, next) => {
   const { chatId } = req.params;
   try {
     const { rows: messages } = await db.query(
-      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic
+      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic, u.role AS author_role
        FROM messages m
        LEFT JOIN users u ON u.id = m.author_id
        WHERE m.chat_id = $1
@@ -173,9 +173,9 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    const { rows: [author] } = await db.query('SELECT name, profile_pic FROM users WHERE id = $1', [req.user.id]);
+    const { rows: [author] } = await db.query('SELECT name, profile_pic, role FROM users WHERE id = $1', [req.user.id]);
     res.status(201).json({
-      message: { ...msg, author_name: author.name, author_pic: author.profile_pic,
+      message: { ...msg, author_name: author.name, author_pic: author.profile_pic, author_role: author.role,
         reactions: [], helpful: 0, markedHelpfulBy: [], poll: null, scheduler: null },
     });
   } catch (err) {

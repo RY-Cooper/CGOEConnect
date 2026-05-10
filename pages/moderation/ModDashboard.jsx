@@ -28,6 +28,7 @@ export default function ModDashboard() {
   const [activeTab, setActiveTab] = useState("pending");
 
   const isModerator = currentUser?.role === "moderator";
+  const isAdmin     = currentUser?.role === "admin";
 
   const [newClass, setNewClass]   = useState({ id: "", name: "", programs: "" });
   const [classMsg, setClassMsg]   = useState(null);
@@ -109,7 +110,7 @@ export default function ModDashboard() {
             </div>
           </div>
 
-          {!isModerator && (
+          {!isModerator && !isAdmin && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               You are viewing this as a non-moderator. In production this page is restricted to moderators only.
             </div>
@@ -141,7 +142,7 @@ export default function ModDashboard() {
             >
               Resolved {!loading && `(${resolved.length})`}
             </button>
-            {isModerator && (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveTab("classes")}
@@ -157,7 +158,7 @@ export default function ModDashboard() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-8">
-        {activeTab === "classes" && isModerator && (
+        {activeTab === "classes" && isAdmin && (
           <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-stone-900 mb-1">Create a class</h2>
             <p className="text-sm text-stone-500 mb-5">

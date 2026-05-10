@@ -253,6 +253,11 @@ function MessageCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold text-stone-900">{msg.author_name ?? "Unknown"}</span>
+              {msg.author_role === "admin" && (
+                <span className="rounded-full bg-[#8C1515] px-2.5 py-0.5 text-xs font-bold tracking-wide text-white uppercase">
+                  ADMIN
+                </span>
+              )}
               {msg.tag && (
                 <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tagStyle(msg.tag)}`}>
                   {msg.tag}
