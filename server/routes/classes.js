@@ -67,6 +67,47 @@ router.post('/:classId/chats', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/classes/:classId/resources
+router.get('/:classId/resources', auth, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.*, u.name AS uploaded_by_name
+       FROM resources r
+       LEFT JOIN users u ON u.id = r.uploaded_by
+       WHERE r.class_id = $1 ORDER BY r.created_at DESC`,
+      [req.params.classId]
+    );
+    res.json({ resources: rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/classes/:classId/resources
+router.post('/:classId/resources', auth, async (req, res, next) => {
+  const { title, url, file_type } = req.body;
+  if (!title || !url) return res.status(400).json({ error: 'title and url are required' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO resources (class_id, title, url, file_type, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.params.classId, title, url, file_type || 'Link', req.user.id]
+    );
+    res.status(201).json({ resource: rows[0] });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/classes/:classId/resources/:id
+router.delete('/:classId/resources/:id', auth, async (req, res, next) => {
+  try {
+    const { rows: [r] } = await db.query('SELECT * FROM resources WHERE id = $1', [req.params.id]);
+    if (!r) return res.status(404).json({ error: 'Resource not found' });
+    if (r.uploaded_by !== req.user.id && req.user.role !== 'moderator') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await db.query('DELETE FROM resources WHERE id = $1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 // GET /api/classes/:classId/reviews
 router.get('/:classId/reviews', auth, async (req, res, next) => {
   try {

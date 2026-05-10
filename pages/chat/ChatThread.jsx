@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { chatsAPI, messagesAPI } from "../../api";
+import { uploadImage } from "../../utils/cloudinary";
 
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -452,6 +453,8 @@ function Composer({ onSubmit, currentUser }) {
   const [text, setText] = useState("");
   const [tag, setTag] = useState("General");
   const [imgPreview, setImgPreview] = useState(null);
+  const [imgUrl, setImgUrl]         = useState(null);
+  const [imgUploading, setImgUploading] = useState(false);
   const [showPoll, setShowPoll] = useState(false);
   const [pollQ, setPollQ] = useState("");
   const [pollOpts, setPollOpts] = useState(["", ""]);
@@ -459,14 +462,25 @@ function Composer({ onSubmit, currentUser }) {
   const [sched, setSched] = useState({ title: "", date: "", time: "", location: "" });
   const fileRef = useRef(null);
 
-  function handleImg(e) {
+  async function handleImg(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setImgPreview(URL.createObjectURL(file));
+    setImgUrl(null);
+    setImgUploading(true);
+    try {
+      const url = await uploadImage(file);
+      setImgUrl(url);
+    } catch {
+      setImgPreview(null);
+    } finally {
+      setImgUploading(false);
+    }
   }
 
   function removeImg() {
     setImgPreview(null);
+    setImgUrl(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -482,15 +496,15 @@ function Composer({ onSubmit, currentUser }) {
   function handleSubmit(e) {
     e.preventDefault();
     const hasContent =
-      text.trim() || imgPreview ||
+      text.trim() || (imgUrl && !imgUploading) ||
       (showPoll && pollQ.trim() && pollOpts.some((o) => o.trim())) ||
       (showSched && sched.title.trim());
-    if (!hasContent) return;
+    if (!hasContent || imgUploading) return;
 
     onSubmit({
       text: text.trim(),
       tag,
-      imageUrl: imgPreview,
+      imageUrl: imgUrl || null,
       poll: showPoll && pollQ.trim()
         ? {
             question: pollQ.trim(),
@@ -503,6 +517,7 @@ function Composer({ onSubmit, currentUser }) {
     setText("");
     setTag("General");
     setImgPreview(null);
+    setImgUrl(null);
     if (fileRef.current) fileRef.current.value = "";
     setShowPoll(false);
     setPollQ("");
@@ -512,9 +527,11 @@ function Composer({ onSubmit, currentUser }) {
   }
 
   const canSubmit =
-    text.trim() || imgPreview ||
-    (showPoll && pollQ.trim() && pollOpts.some((o) => o.trim())) ||
-    (showSched && sched.title.trim());
+    !imgUploading && (
+      text.trim() || imgUrl ||
+      (showPoll && pollQ.trim() && pollOpts.some((o) => o.trim())) ||
+      (showSched && sched.title.trim())
+    );
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
@@ -549,7 +566,12 @@ function Composer({ onSubmit, currentUser }) {
 
       {imgPreview && (
         <div className="mt-3 relative inline-block">
-          <img src={imgPreview} alt="Preview" className="max-h-48 rounded-xl border border-stone-200 object-cover" />
+          <img src={imgPreview} alt="Preview" className={`max-h-48 rounded-xl border border-stone-200 object-cover ${imgUploading ? "opacity-50" : ""}`} />
+          {imgUploading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
+            </div>
+          )}
           <button
             type="button"
             onClick={removeImg}

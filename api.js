@@ -90,6 +90,13 @@ export const commentsAPI = {
   flag: (id, reason) => req('POST', `/comments/${id}/flag`, { reason }),
 };
 
+// ── Resources ─────────────────────────────────────────────────────────────────
+export const resourcesAPI = {
+  list:   (classId)       => req('GET',    `/classes/${classId}/resources`),
+  create: (classId, data) => req('POST',   `/classes/${classId}/resources`, data),
+  remove: (classId, id)   => req('DELETE', `/classes/${classId}/resources/${id}`),
+};
+
 // ── Flags ─────────────────────────────────────────────────────────────────────
 export const flagsAPI = {
   list:    (resolved) => req('GET',   `/flags${resolved !== undefined ? `?resolved=${resolved}` : ''}`),

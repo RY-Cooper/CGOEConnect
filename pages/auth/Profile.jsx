@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { uploadImage } from "../../utils/cloudinary";
 import TopNav from "../../components/TopNav";
 
 const TIMEZONES = [
@@ -23,16 +24,33 @@ const TIMEZONES = [
 export default function Profile() {
   const { currentUser, updateProfile } = useAuth();
   const navigate = useNavigate();
-  const [displayName, setDisplayName]     = useState(currentUser?.name ?? "");
-  const [bio, setBio]                     = useState(currentUser?.bio ?? "");
-  const [timezone, setTimezone]           = useState(currentUser?.timezone ?? "");
-  const [profilePicUrl, setProfilePicUrl] = useState(currentUser?.profilePic ?? "");
-  const previewPic = profilePicUrl || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
+  const [displayName, setDisplayName] = useState(currentUser?.name ?? "");
+  const [bio, setBio]                 = useState(currentUser?.bio ?? "");
+  const [timezone, setTimezone]       = useState(currentUser?.timezone ?? "");
+  const [picFile, setPicFile]         = useState(null);
+  const [picPreview, setPicPreview]   = useState(currentUser?.profilePic ?? "");
+  const [saving, setSaving]           = useState(false);
+  const picRef                        = useRef(null);
+  const previewPic = picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
+
+  function handlePicPick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPicFile(file);
+    setPicPreview(URL.createObjectURL(file));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    await updateProfile({ displayName, bio, profilePic: profilePicUrl || undefined, timezone });
-    navigate("/", { replace: true });
+    setSaving(true);
+    try {
+      let picUrl = picPreview;
+      if (picFile) picUrl = await uploadImage(picFile);
+      await updateProfile({ displayName, bio, profilePic: picUrl || undefined, timezone });
+      navigate("/", { replace: true });
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (!currentUser) {
@@ -62,26 +80,32 @@ export default function Profile() {
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Avatar */}
-            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-              <img
-                src={previewPic}
-                alt=""
-                className="h-24 w-24 rounded-full object-cover border border-stone-200 shrink-0"
-                onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80"; }}
-              />
-              <div className="flex-1">
-                <label htmlFor="profilePicUrl" className="block text-sm font-medium text-stone-700 mb-1">
-                  Profile picture URL
-                </label>
-                <input
-                  id="profilePicUrl"
-                  type="url"
-                  value={profilePicUrl}
-                  onChange={(e) => setProfilePicUrl(e.target.value)}
-                  placeholder="https://example.com/your-photo.jpg"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="relative shrink-0">
+                <img
+                  src={previewPic}
+                  alt=""
+                  className="h-24 w-24 rounded-full object-cover border border-stone-200"
+                  onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80"; }}
                 />
-                <p className="text-xs text-stone-400 mt-1">Paste any public image URL — LinkedIn, Gravatar, etc.</p>
+                <button
+                  type="button"
+                  onClick={() => picRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#8C1515] text-white shadow hover:bg-[#6f1010] transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                    <circle cx="12" cy="13" r="3"/>
+                  </svg>
+                </button>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-stone-700">Profile picture</p>
+                <input ref={picRef} type="file" accept="image/*" onChange={handlePicPick} className="hidden" />
+                <button type="button" onClick={() => picRef.current?.click()} className="mt-1 text-xs font-medium text-[#8C1515] hover:underline">
+                  {picFile ? "Change photo" : "Upload photo"}
+                </button>
+                {picFile && <p className="mt-0.5 text-xs text-stone-400 truncate max-w-[180px]">{picFile.name}</p>}
               </div>
             </div>
 
@@ -175,9 +199,10 @@ export default function Profile() {
 
             <button
               type="submit"
-              className="w-full rounded-lg bg-[#8C1515] px-4 py-3 text-sm font-semibold text-white shadow hover:bg-[#6f1010] transition-colors"
+              disabled={saving}
+              className="w-full rounded-lg bg-[#8C1515] px-4 py-3 text-sm font-semibold text-white shadow hover:bg-[#6f1010] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Save profile
+              {saving ? "Saving…" : "Save profile"}
             </button>
           </form>
         </div>
