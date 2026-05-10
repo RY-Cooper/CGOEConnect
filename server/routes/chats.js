@@ -5,13 +5,19 @@ const auth = require('../middleware/auth');
 // GET /api/chats/general  — must come before /:id
 router.get('/general', auth, async (req, res, next) => {
   try {
-    const { rows } = await db.query(
+    let { rows } = await db.query(
       `SELECT c.*, u.name AS created_by_name, u.profile_pic AS created_by_pic
        FROM chats c
        LEFT JOIN users u ON u.id = c.created_by
        WHERE c.class_id IS NULL
        ORDER BY c.created_at ASC`
     );
+    if (!rows.length) {
+      const { rows: created } = await db.query(
+        `INSERT INTO chats (title, tags) VALUES ('#introductions', '{}') RETURNING *`
+      );
+      rows = [{ ...created[0], created_by_name: null, created_by_pic: null }];
+    }
     res.json({ chats: rows });
   } catch (err) { next(err); }
 });

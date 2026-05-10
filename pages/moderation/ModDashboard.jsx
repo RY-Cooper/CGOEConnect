@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { flagsAPI } from "../../api";
+import { flagsAPI, classesAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 
 function timeAgo(dateStr) {
@@ -29,12 +29,30 @@ export default function ModDashboard() {
 
   const isModerator = currentUser?.role === "moderator";
 
+  const [newClass, setNewClass]   = useState({ id: "", name: "", programs: "" });
+  const [classMsg, setClassMsg]   = useState(null);
+
   useEffect(() => {
     flagsAPI.list()
       .then(({ flags: all }) => setFlags(all))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleCreateClass(e) {
+    e.preventDefault();
+    try {
+      const programs = newClass.programs
+        ? newClass.programs.split(",").map((p) => p.trim()).filter(Boolean)
+        : [];
+      await classesAPI.create({ id: newClass.id, name: newClass.name, programs });
+      setClassMsg({ ok: true, text: `Class "${newClass.name}" created!` });
+      setNewClass({ id: "", name: "", programs: "" });
+    } catch (err) {
+      setClassMsg({ ok: false, text: err.message || "Failed to create class" });
+    }
+    setTimeout(() => setClassMsg(null), 4000);
+  }
 
   const pending  = flags.filter((f) => !f.resolved);
   const resolved = flags.filter((f) => f.resolved);
@@ -123,16 +141,83 @@ export default function ModDashboard() {
             >
               Resolved {!loading && `(${resolved.length})`}
             </button>
+            {isModerator && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("classes")}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "classes" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"
+                }`}
+              >
+                Manage Classes
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-8">
-        {loading ? (
+        {activeTab === "classes" && isModerator && (
+          <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-stone-900 mb-1">Create a class</h2>
+            <p className="text-sm text-stone-500 mb-5">
+              Add a class to the catalog so students can enroll and create subchats.
+            </p>
+            {classMsg && (
+              <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
+                classMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
+              }`}>
+                {classMsg.text}
+              </div>
+            )}
+            <form onSubmit={handleCreateClass} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Class ID</label>
+                <input
+                  type="text"
+                  value={newClass.id}
+                  onChange={(e) => setNewClass((p) => ({ ...p, id: e.target.value }))}
+                  placeholder="e.g. EDUC101"
+                  required
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Class name</label>
+                <input
+                  type="text"
+                  value={newClass.name}
+                  onChange={(e) => setNewClass((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Introduction to Education"
+                  required
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Programs (comma-separated)</label>
+                <input
+                  type="text"
+                  value={newClass.programs}
+                  onChange={(e) => setNewClass((p) => ({ ...p, programs: e.target.value }))}
+                  placeholder="e.g. CGOE, HCP, MS"
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+                />
+              </div>
+              <button
+                type="submit"
+                className="self-start rounded-lg bg-[#8C1515] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#6f1010] transition-colors"
+              >
+                Create class
+              </button>
+            </form>
+          </div>
+        )}
+
+        {(activeTab === "pending" || activeTab === "resolved") && loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
           </div>
-        ) : (
+        ) : (activeTab === "pending" || activeTab === "resolved") && (
           <>
             {activeTab === "pending" && (
               <div className="mb-6 grid grid-cols-3 gap-4">

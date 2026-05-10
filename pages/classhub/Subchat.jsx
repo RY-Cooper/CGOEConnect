@@ -271,7 +271,7 @@ export default function Subchat() {
           </section>
         )}
 
-        <ChatThread chatId={chatId} />
+        <ChatThread chatId={chatId} chatObj={chat} />
       </main>
     </div>
   );

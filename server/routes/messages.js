@@ -117,4 +117,21 @@ router.post('/:id/attend', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/messages/:id — chat moderator or global moderator only
+router.delete('/:id', auth, async (req, res, next) => {
+  try {
+    const { rows: [msg] } = await db.query(
+      `SELECT m.id, c.moderator_id FROM messages m
+       JOIN chats c ON c.id = m.chat_id WHERE m.id = $1`,
+      [req.params.id]
+    );
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    const isChatMod   = msg.moderator_id === req.user.id;
+    const isGlobalMod = req.user.role === 'moderator';
+    if (!isChatMod && !isGlobalMod) return res.status(403).json({ error: 'Forbidden' });
+    await db.query('DELETE FROM messages WHERE id = $1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

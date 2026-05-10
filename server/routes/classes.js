@@ -1,6 +1,21 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const requireModerator = require('../middleware/requireModerator');
+
+// POST /api/classes — moderator only
+router.post('/', auth, requireModerator, async (req, res, next) => {
+  const { id, name, programs } = req.body;
+  if (!id || !name) return res.status(400).json({ error: 'id and name are required' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO classes (id, name, programs) VALUES ($1,$2,$3)
+       ON CONFLICT (id) DO UPDATE SET name=$2, programs=$3 RETURNING *`,
+      [id.trim(), name.trim(), programs || []]
+    );
+    res.status(201).json({ class: rows[0] });
+  } catch (err) { next(err); }
+});
 
 // GET /api/classes?program=CGOE
 router.get('/', auth, async (req, res, next) => {
@@ -43,8 +58,8 @@ router.post('/:classId/chats', auth, async (req, res, next) => {
   if (!title) return res.status(400).json({ error: 'title is required' });
   try {
     const { rows } = await db.query(
-      `INSERT INTO chats (class_id, title, tags, created_by)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO chats (class_id, title, tags, created_by, moderator_id)
+       VALUES ($1,$2,$3,$4,$4)
        RETURNING *`,
       [req.params.classId, title, tags || [], req.user.id]
     );

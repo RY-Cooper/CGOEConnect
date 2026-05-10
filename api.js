@@ -40,6 +40,7 @@ export const usersAPI = {
 
 // ── Classes ──────────────────────────────────────────────────────────────────
 export const classesAPI = {
+  create:       (data)             => req('POST', '/classes', data),
   list:         (program)          => req('GET',  `/classes${program ? `?program=${encodeURIComponent(program)}` : ''}`),
   get:          (id)               => req('GET',  `/classes/${id}`),
   chats:        (classId)          => req('GET',  `/classes/${classId}/chats`),
@@ -64,6 +65,7 @@ export const messagesAPI = {
   flag:    (id, reason)   => req('POST',   `/messages/${id}/flag`, { reason }),
   vote:    (id, optionId) => req('POST',   `/messages/${id}/vote`, { optionId }),
   attend:  (id)           => req('POST',   `/messages/${id}/attend`),
+  remove:  (id)           => req('DELETE', `/messages/${id}`),
 };
 
 // ── Posts ─────────────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ export function normalizeUser(u) {
     identityTags:       u.identity_tags ?? [],
     studentStatus:      u.student_status ?? '',
     modalityTags:       u.modality_tags ?? [],
+    timezone:           u.timezone ?? '',
     customClasses:      [],
     savedPosts:         [],
   };

@@ -23,16 +23,15 @@ const TIMEZONES = [
 export default function Profile() {
   const { currentUser, updateProfile } = useAuth();
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState(currentUser?.name ?? "");
-  const [bio, setBio]                 = useState(currentUser?.bio ?? "");
-  const [timezone, setTimezone]       = useState(currentUser?.timezone ?? "");
-  const previewPic =
-    currentUser?.profilePic ??
-    "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
+  const [displayName, setDisplayName]     = useState(currentUser?.name ?? "");
+  const [bio, setBio]                     = useState(currentUser?.bio ?? "");
+  const [timezone, setTimezone]           = useState(currentUser?.timezone ?? "");
+  const [profilePicUrl, setProfilePicUrl] = useState(currentUser?.profilePic ?? "");
+  const previewPic = profilePicUrl || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    updateProfile({ displayName, bio, profilePic: previewPic, timezone });
+    await updateProfile({ displayName, bio, profilePic: profilePicUrl || undefined, timezone });
     navigate("/", { replace: true });
   }
 
@@ -63,17 +62,26 @@ export default function Profile() {
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Avatar */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
               <img
                 src={previewPic}
                 alt=""
                 className="h-24 w-24 rounded-full object-cover border border-stone-200 shrink-0"
+                onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80"; }}
               />
-              <div>
-                <p className="text-sm font-medium text-stone-700">Profile picture</p>
-                <p className="text-xs text-stone-400 mt-1">
-                  Avatar placeholder — upload coming later.
-                </p>
+              <div className="flex-1">
+                <label htmlFor="profilePicUrl" className="block text-sm font-medium text-stone-700 mb-1">
+                  Profile picture URL
+                </label>
+                <input
+                  id="profilePicUrl"
+                  type="url"
+                  value={profilePicUrl}
+                  onChange={(e) => setProfilePicUrl(e.target.value)}
+                  placeholder="https://example.com/your-photo.jpg"
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+                />
+                <p className="text-xs text-stone-400 mt-1">Paste any public image URL — LinkedIn, Gravatar, etc.</p>
               </div>
             </div>
 

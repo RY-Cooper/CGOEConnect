@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { chatsAPI, messagesAPI } from "../../api";
 
+
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const TAG_OPTIONS = ["General", "HW", "Test", "Yap", "Project", "Study", "Question", "Resource"];
@@ -218,7 +219,7 @@ function SchedulerDisplay({ scheduler, messageId, currentUserId, onAttend }) {
 function MessageCard({
   msg, currentUser, showEmoji, onToggleEmoji, onAddEmoji,
   onToggleHelpful, onFlag, onVote, onAttend, isFlagged,
-  replies, onAddReply,
+  replies, onAddReply, isChatModerator, onDelete,
 }) {
   const isHelpful = msg.markedHelpfulBy?.includes(currentUser?.id);
   // Use live timezone for current user's own messages (reflects Profile edits)
@@ -363,6 +364,19 @@ function MessageCard({
                   />
                 )}
               </div>
+
+              {isChatModerator && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(msg.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                  Delete
+                </button>
+              )}
 
               <button
                 type="button"
@@ -682,11 +696,22 @@ function Composer({ onSubmit, currentUser }) {
 
 // ── ChatThread (exported) ────────────────────────────────────────────────────
 
-export default function ChatThread({ chatId }) {
+export default function ChatThread({ chatId, chatObj }) {
   const { currentUser } = useAuth();
 
+  const [chat, setChat]   = useState(chatObj ?? null);
   const [msgList, setMsgList] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (chatObj) { setChat(chatObj); return; }
+    if (!chatId) return;
+    chatsAPI.get(chatId).then(({ chat: c }) => setChat(c)).catch(() => {});
+  }, [chatId, chatObj]);
+
+  const isChatModerator = Boolean(
+    currentUser?.id && chat?.moderator_id && currentUser.id === chat.moderator_id
+  );
   const [sortBy, setSortBy] = useState("new");
   const [emojiTarget, setEmojiTarget] = useState(null);
   const [flaggedIds, setFlaggedIds] = useState(new Set());
@@ -785,6 +810,13 @@ export default function ChatThread({ chatId }) {
 
   const toggleEmoji = useCallback((id) => {
     setEmojiTarget((prev) => (prev === id ? null : id));
+  }, []);
+
+  const handleDelete = useCallback(async (id) => {
+    try {
+      await messagesAPI.remove(id);
+      setMsgList((prev) => prev.filter((m) => m.id !== id));
+    } catch { /* ignore */ }
   }, []);
 
   const toggleFlag = useCallback((id) => {
@@ -916,6 +948,8 @@ export default function ChatThread({ chatId }) {
               isFlagged={flaggedIds.has(msg.id) || msg.flagged}
               replies={replyMap[msg.id] ?? []}
               onAddReply={(reply) => addMsgReply(msg.id, reply)}
+              isChatModerator={isChatModerator}
+              onDelete={handleDelete}
             />
           ))}
         </div>

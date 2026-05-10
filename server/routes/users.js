@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 
-const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, created_at';
+const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at';
 
 async function withClasses(user) {
   const { rows } = await db.query('SELECT class_id FROM user_classes WHERE user_id = $1', [user.id]);
@@ -21,7 +21,7 @@ router.get('/:id', auth, async (req, res, next) => {
 // PUT /api/users/:id
 router.put('/:id', auth, async (req, res, next) => {
   if (req.user.id !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
-  const { name, bio, profile_pic, student_status, modality_tags, identity_tags, agreed_to_guidelines } = req.body;
+  const { name, bio, profile_pic, student_status, modality_tags, identity_tags, agreed_to_guidelines, timezone } = req.body;
   try {
     const { rows } = await db.query(
       `UPDATE users SET
@@ -31,9 +31,10 @@ router.put('/:id', auth, async (req, res, next) => {
         student_status       = COALESCE($4, student_status),
         modality_tags        = COALESCE($5, modality_tags),
         identity_tags        = COALESCE($6, identity_tags),
-        agreed_to_guidelines = COALESCE($7, agreed_to_guidelines)
-       WHERE id = $8 RETURNING ${USER_COLS}`,
-      [name, bio, profile_pic, student_status, modality_tags, identity_tags, agreed_to_guidelines, req.params.id]
+        agreed_to_guidelines = COALESCE($7, agreed_to_guidelines),
+        timezone             = COALESCE($8, timezone)
+       WHERE id = $9 RETURNING ${USER_COLS}`,
+      [name, bio, profile_pic, student_status, modality_tags, identity_tags, agreed_to_guidelines, timezone, req.params.id]
     );
     res.json({ user: await withClasses(rows[0]) });
   } catch (err) { next(err); }

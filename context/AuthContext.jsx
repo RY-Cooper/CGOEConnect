@@ -94,6 +94,7 @@ export function AuthProvider({ children }) {
       student_status:partial.studentStatus,
       modality_tags: partial.modalityTags,
       identity_tags: partial.identityTags,
+      timezone:      partial.timezone,
     };
     const { user } = await usersAPI.update(currentUser.id, payload);
     const normalized = normalizeUser(user);
