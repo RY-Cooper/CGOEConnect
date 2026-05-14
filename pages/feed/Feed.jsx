@@ -453,9 +453,13 @@ export default function Feed() {
 
 
           {/* Class reviews quick links */}
-          {hubs.length > 0 && (
-            <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-stone-700">Class reviews</h2>
+          <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-stone-700">Class reviews</h2>
+            {hubs.length === 0 ? (
+              <p className="text-xs text-stone-400 text-center py-2">
+                <Link to="/profile-setup" className="text-[#8C1515] hover:underline">Enroll in classes</Link> to see reviews.
+              </p>
+            ) : (
               <div className="flex flex-col gap-1.5">
                 {hubs.slice(0, 4).map((h) => (
                   <Link
@@ -470,8 +474,8 @@ export default function Feed() {
                   </Link>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </aside>
       </main>
     </div>
