@@ -92,6 +92,7 @@ export default function ClassHub() {
             <NavLink to={`${base}/announcements`} className={navCls}>Announcements</NavLink>
             <NavLink to={base} end className={navCls}>Subchats</NavLink>
             <NavLink to={`${base}/resources`} className={navCls}>Resources</NavLink>
+            <Link to={`/reviews/${encodeURIComponent(classId)}`} className={navCls({isActive: false})}>Reviews</Link>
             <Link
               to="/chat/new"
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#8C1515] px-3 py-2 text-sm font-semibold text-white hover:bg-[#6f1010] transition-colors"
