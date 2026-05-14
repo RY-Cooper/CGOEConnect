@@ -24,7 +24,7 @@ const TIMEZONES = [
 ];
 
 export default function Profile() {
-  const { currentUser, updateProfile, setSelectedClassIds } = useAuth();
+  const { currentUser, updateProfile, setSelectedClassIds, deleteAccount } = useAuth();
   const navigate = useNavigate();
 
   const [displayName,   setDisplayName]   = useState(currentUser?.name ?? "");
@@ -39,6 +39,8 @@ export default function Profile() {
   const [picPreview,    setPicPreview]    = useState(currentUser?.profilePic ?? "");
   const [saving,        setSaving]        = useState(false);
   const [saveError,     setSaveError]     = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting,      setDeleting]      = useState(false);
   const picRef = useRef(null);
 
   const previewPic = picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
@@ -273,8 +275,57 @@ export default function Profile() {
               {saving ? "Saving…" : "Save profile"}
             </button>
           </form>
+
+          <div className="mt-8 border-t border-stone-200 pt-6">
+            <p className="text-sm font-medium text-stone-700 mb-1">Danger zone</p>
+            <p className="text-xs text-stone-400 mb-3">Permanently deletes your account, posts, messages, and all associated data. This cannot be undone.</p>
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Delete my account
+            </button>
+          </div>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <h2 className="text-lg font-semibold text-stone-900 mb-2">Delete your account?</h2>
+            <p className="text-sm text-stone-500 mb-6">
+              This will permanently remove your profile, posts, messages, and all data. You cannot undo this.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 rounded-lg border border-stone-200 px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await deleteAccount();
+                  } catch {
+                    setDeleting(false);
+                    setShowDeleteModal(false);
+                  }
+                }}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -152,4 +152,21 @@ router.post('/:id/comments', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/posts/:id — author, moderator, or admin
+router.delete('/:id', auth, async (req, res, next) => {
+  try {
+    const { rows: [post] } = await db.query('SELECT author_id FROM posts WHERE id=$1', [req.params.id]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const isAuthor = post.author_id === req.user.id;
+    const isMod = req.user.role === 'moderator' || req.user.role === 'admin';
+    if (!isAuthor && !isMod) return res.status(403).json({ error: 'Forbidden' });
+    await db.query('DELETE FROM post_upvotes WHERE post_id=$1', [req.params.id]);
+    await db.query('DELETE FROM saved_posts WHERE post_id=$1', [req.params.id]);
+    await db.query('DELETE FROM comments WHERE post_id=$1', [req.params.id]);
+    await db.query("DELETE FROM flags WHERE target_type='post' AND target_id=$1", [req.params.id]);
+    await db.query('DELETE FROM posts WHERE id=$1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

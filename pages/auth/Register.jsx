@@ -71,20 +71,13 @@ export default function Register() {
     }
     setError(""); setLoading(true);
     try {
-      // Register creates the user and logs them in
+      const { authAPI } = await import("../../api");
+      await authAPI.register(email.trim(), password.trim(), displayName, identityTags[0] ?? "CGOE");
       await login(email.trim(), password.trim());
-    } catch {
-      // User might not exist yet — try registering first
-      try {
-        const { authAPI } = await import("../../api");
-        const { token } = await authAPI.register(email.trim(), password.trim(), displayName, identityTags[0] ?? "CGOE");
-        localStorage.setItem("cgoe_token", token);
-        await login(email.trim(), password.trim());
-      } catch (err) {
-        setError(err.message || "Registration failed");
-        setLoading(false);
-        return;
-      }
+    } catch (err) {
+      setError(err.message || "Registration failed");
+      setLoading(false);
+      return;
     }
     await saveRegistration({
       displayName,

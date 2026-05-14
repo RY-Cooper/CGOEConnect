@@ -123,6 +123,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem(USER_KEY, JSON.stringify(fresh));
   }, [currentUser]);
 
+  const deleteAccount = useCallback(async () => {
+    if (!currentUser) return;
+    await usersAPI.delete(currentUser.id);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setCurrentUser(null);
+  }, [currentUser]);
+
   // Toggle enrollment in a class
   const setSelectedClassIds = useCallback(async (ids) => {
     if (!currentUser) return;
@@ -148,6 +156,7 @@ export function AuthProvider({ children }) {
     currentUser,
     login,
     logout,
+    deleteAccount,
     agreedToGuidelines:  Boolean(currentUser?.agreedToGuidelines),
     setAgreedToGuidelines,
     updateProfile,
@@ -155,7 +164,7 @@ export function AuthProvider({ children }) {
     selectedClassIds,
     setSelectedClassIds,
   }), [
-    ready, currentUser, login, logout,
+    ready, currentUser, login, logout, deleteAccount,
     setAgreedToGuidelines, updateProfile, saveRegistration,
     selectedClassIds, setSelectedClassIds,
   ]);

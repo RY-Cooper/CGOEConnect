@@ -53,7 +53,7 @@ export default function TopNav() {
             </svg>
             Saved
           </Link>
-          {currentUser?.role === "moderator" && (
+          {(currentUser?.role === "moderator" || currentUser?.role === "admin") && (
             <Link
               to="/mod"
               className="hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 transition-colors"
@@ -155,7 +155,7 @@ export default function TopNav() {
                 </Link>
               </div>
 
-              {currentUser?.role === "moderator" && (
+              {(currentUser?.role === "moderator" || currentUser?.role === "admin") && (
                 <Link
                   to="/mod"
                   onClick={() => setOpen(false)}

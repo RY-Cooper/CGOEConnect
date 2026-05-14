@@ -61,6 +61,38 @@ router.delete('/:id/classes/:classId', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/users/:id — delete own account
+router.delete('/:id', auth, async (req, res, next) => {
+  if (req.user.id !== req.params.id) return res.status(403).json({ error: 'Forbidden' });
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const uid = req.params.id;
+    await client.query('DELETE FROM message_reactions WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM message_helpful WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM poll_votes WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM scheduler_attendees WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM user_classes WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM saved_posts WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM post_upvotes WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM flags WHERE reported_by=$1', [uid]);
+    await client.query('DELETE FROM comments WHERE author_id=$1', [uid]);
+    await client.query('DELETE FROM messages WHERE author_id=$1', [uid]);
+    await client.query('DELETE FROM posts WHERE author_id=$1', [uid]);
+    await client.query('DELETE FROM reviews WHERE author_id=$1', [uid]);
+    await client.query('UPDATE chats SET moderator_id=NULL WHERE moderator_id=$1', [uid]);
+    await client.query('UPDATE chats SET created_by=NULL WHERE created_by=$1', [uid]);
+    await client.query('DELETE FROM users WHERE id=$1', [uid]);
+    await client.query('COMMIT');
+    res.status(204).send();
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // GET /api/users/:id/saved-posts
 router.get('/:id/saved-posts', auth, async (req, res, next) => {
   try {

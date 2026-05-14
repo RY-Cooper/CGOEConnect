@@ -4,6 +4,52 @@ import { useAuth } from "../../context/AuthContext";
 import { classesAPI, postsAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 
+function PostComposer({ currentUser, onPost }) {
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!text.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const { post } = await postsAPI.create({ content: text.trim() });
+      onPost(post);
+      setText("");
+    } catch { /* ignore */ } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm mb-6">
+      <div className="flex gap-3">
+        <img
+          src={currentUser?.profilePic || `https://i.pravatar.cc/150?u=${currentUser?.id}`}
+          alt={currentUser?.name}
+          className="h-8 w-8 rounded-full object-cover shrink-0"
+        />
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Share something with the community…"
+          rows={2}
+          className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-[#8C1515] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8C1515]/20 transition"
+        />
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          type="submit"
+          disabled={!text.trim() || submitting}
+          className="rounded-xl bg-[#8C1515] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f1010] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? "Posting…" : "Post"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -13,7 +59,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function PostCard({ post, currentUser, onUpvote, onSave, onFlag, savedIds, upvotedIds, reportedIds, showComments, onToggleComments }) {
+function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, savedIds, upvotedIds, reportedIds, showComments, onToggleComments }) {
   const [comments, setComments] = useState(null);
   const [newComment, setNewComment] = useState("");
 
@@ -107,7 +153,18 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, savedIds, upvot
             {isSaved ? "Saved" : "Save"}
           </button>
 
-          {isReported ? (
+          {post.author_id === currentUser?.id ? (
+            <button
+              type="button"
+              onClick={() => onDelete(post.id)}
+              className="ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+              Delete
+            </button>
+          ) : isReported ? (
             <span className="ml-auto px-2.5 py-1.5 text-xs text-stone-400">Reported</span>
           ) : (
             <button
@@ -237,6 +294,13 @@ export default function Feed() {
     try { await postsAPI.save(postId); } catch { /* ignore */ }
   }
 
+  async function handleDelete(postId) {
+    try {
+      await postsAPI.remove(postId);
+      setFeedPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch { /* ignore */ }
+  }
+
   async function handleFlag(postId) {
     setReportedPostIds((prev) => new Set([...prev, postId]));
     showToast("Post reported — moderators will review it.");
@@ -288,13 +352,19 @@ export default function Feed() {
             <p className="mt-1 text-sm text-stone-500">Latest posts from your community.</p>
           </div>
 
+          <PostComposer currentUser={currentUser} onPost={(post) => setFeedPosts((prev) => [post, ...prev])} />
+
           {feedPosts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-stone-200 bg-white py-14 text-center">
               <svg className="mx-auto mb-3 h-10 w-10 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
               </svg>
-              <p className="text-sm font-medium text-stone-500">No posts yet.</p>
-              <p className="mt-1 text-xs text-stone-400">Enroll in classes to see posts from your community.</p>
+              <p className="text-sm font-medium text-stone-500">No posts yet — be the first!</p>
+              <p className="mt-1 text-xs text-stone-400">
+                Use the box above to post, or{" "}
+                <Link to="/profile-setup" className="text-[#8C1515] hover:underline">enroll in classes</Link>
+                {" "}to see your classmates' posts.
+              </p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -306,6 +376,7 @@ export default function Feed() {
                   onUpvote={handleUpvote}
                   onSave={handleSave}
                   onFlag={handleFlag}
+                  onDelete={handleDelete}
                   savedIds={savedIds}
                   upvotedIds={upvotedIds}
                   reportedIds={reportedPostIds}
