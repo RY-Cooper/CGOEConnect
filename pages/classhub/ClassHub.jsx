@@ -1,8 +1,8 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useParams } from "react-router-dom";
 import { classesAPI } from "../../api";
 import TopNav from "../../components/TopNav";
-import { AuthContext } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 function tagVariant(tag) {
   const t = tag?.toUpperCase?.() ?? "";
@@ -119,7 +119,7 @@ function NewChatModal({ classId, isChannel, onCreated, onClose }) {
 
 export default function ClassHub() {
   const { classId } = useParams();
-  const { currentUser } = useContext(AuthContext);
+  const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
 
   const [hubClass, setHubClass] = useState(null);

@@ -58,6 +58,7 @@ export const chatsAPI = {
   get:        (id)      => req('GET',  `/chats/${id}`),
   messages:   (chatId)  => req('GET',  `/chats/${chatId}/messages`),
   postMessage:(chatId, data) => req('POST', `/chats/${chatId}/messages`, data),
+  remove:     (id)      => req('DELETE', `/chats/${id}`),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────

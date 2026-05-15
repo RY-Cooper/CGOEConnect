@@ -130,6 +130,17 @@ router.get('/:chatId/messages', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/chats/:id — admin only
+router.delete('/:id', auth, async (req, res, next) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  try {
+    const { rows: [chat] } = await db.query('SELECT id FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    await db.query('DELETE FROM chats WHERE id = $1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 // POST /api/chats/:chatId/messages
 router.post('/:chatId/messages', auth, async (req, res, next) => {
   const { chatId } = req.params;

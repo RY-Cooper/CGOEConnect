@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { classesAPI, postsAPI } from "../../api";
@@ -233,7 +233,7 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, saved
 
 export default function Feed() {
   const { selectedClassIds, setSelectedClassIds, currentUser } = useAuth();
-  const navigate = useNavigate();
+  const isAdmin = currentUser?.role === "admin";
 
   const [feedPosts, setFeedPosts] = useState([]);
   const [catalogClasses, setCatalogClasses] = useState([]);
@@ -301,6 +301,13 @@ export default function Feed() {
     } catch { /* ignore */ }
   }
 
+  function toggleClass(id) {
+    const next = selectedClassIds.includes(id)
+      ? selectedClassIds.filter((x) => x !== id)
+      : [...selectedClassIds, id];
+    setSelectedClassIds(next).catch(() => {});
+  }
+
   async function handleFlag(postId) {
     setReportedPostIds((prev) => new Set([...prev, postId]));
     showToast("Post reported — moderators will review it.");
@@ -313,13 +320,6 @@ export default function Feed() {
       next.has(postId) ? next.delete(postId) : next.add(postId);
       return next;
     });
-  }
-
-  function toggleClass(id) {
-    const next = selectedClassIds.includes(id)
-      ? selectedClassIds.filter((x) => x !== id)
-      : [...selectedClassIds, id];
-    setSelectedClassIds(next).catch(() => {});
   }
 
   if (loading) {
@@ -395,13 +395,22 @@ export default function Feed() {
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-stone-700">Active classes</h2>
-              <button
-                type="button"
-                onClick={() => setShowClassPicker((p) => !p)}
-                className="text-xs font-medium text-[#8C1515] hover:underline"
-              >
-                {showClassPicker ? "Done" : "Manage"}
-              </button>
+              {isAdmin ? (
+                <Link
+                  to="/admin/classes"
+                  className="text-xs font-medium text-[#8C1515] hover:underline"
+                >
+                  Manage
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowClassPicker((p) => !p)}
+                  className="text-xs font-medium text-[#8C1515] hover:underline"
+                >
+                  {showClassPicker ? "Done" : "Manage"}
+                </button>
+              )}
             </div>
 
             {hubs.length === 0 ? (
@@ -422,7 +431,7 @@ export default function Feed() {
               </ul>
             )}
 
-            {showClassPicker && catalogClasses.length > 0 && (
+            {!isAdmin && showClassPicker && catalogClasses.length > 0 && (
               <div className="mt-3 border-t border-stone-100 pt-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Catalog</p>
                 <div className="flex flex-col gap-1.5">
@@ -449,8 +458,6 @@ export default function Feed() {
               </div>
             )}
           </div>
-
-
 
           {/* Class reviews quick links */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">

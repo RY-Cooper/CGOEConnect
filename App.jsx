@@ -29,6 +29,7 @@ import Feed           from "./pages/feed/Feed";
 import SavedPosts     from "./pages/feed/SavedPosts";
 import ClassReviews   from "./pages/reviews/ClassReviews";
 import ModDashboard   from "./pages/moderation/ModDashboard";
+import ManageClasses  from "./pages/admin/ManageClasses";
 
 // ── Auth guard (uses fake auth state from localStorage) ────
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -84,6 +85,9 @@ function AuthBootLoader() {
 
         {/* ── Moderation ── */}
         <Route path="/mod" element={<PrivateRoute><ModDashboard /></PrivateRoute>} />
+
+        {/* ── Admin ── */}
+        <Route path="/admin/classes" element={<PrivateRoute><ManageClasses /></PrivateRoute>} />
 
         {/* ── Fallback ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
