@@ -219,11 +219,12 @@ function SchedulerDisplay({ scheduler, messageId, currentUserId, onAttend }) {
 
 function MessageCard({
   msg, currentUser, showEmoji, onToggleEmoji, onAddEmoji,
-  onToggleHelpful, onFlag, onVote, onAttend, isFlagged,
+  onToggleHelpful, onSave, onFlag, onVote, onAttend, isFlagged,
   replies, onAddReply, isChatModerator, onDelete,
 }) {
   const isHelpful = msg.markedHelpfulBy?.includes(currentUser?.id);
-  const authorTz = msg.author_id === currentUser?.id ? currentUser?.timezone : null;
+  const isSaved = Boolean(msg.saved);
+  const authorTz = msg.author_timezone || (msg.author_id === currentUser?.id ? currentUser?.timezone : null);
   const tzAbbr = getTzAbbr(authorTz);
   const [showReplies, setShowReplies] = useState(false);
   const [newReply, setNewReply] = useState("");
@@ -268,7 +269,10 @@ function MessageCard({
                   Flagged
                 </span>
               )}
-              <span className="ml-auto text-xs text-stone-400">{fmtTime(msg.created_at)}</span>
+              <span className="ml-auto text-xs text-stone-400">
+                {fmtTime(msg.created_at)}
+                {tzAbbr && <span className="ml-1.5 text-stone-300">· {tzAbbr}</span>}
+              </span>
             </div>
 
             {msg.content && (
@@ -383,8 +387,20 @@ function MessageCard({
 
               <button
                 type="button"
-                onClick={() => onFlag(msg.id)}
+                onClick={() => onSave(msg.id)}
                 className={`ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors
+                  ${isSaved ? "text-amber-700 bg-amber-50" : "text-stone-400 hover:text-amber-600 hover:bg-amber-50"}`}
+              >
+                <svg className="h-3.5 w-3.5" fill={isSaved ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                </svg>
+                {isSaved ? "Saved" : "Save"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onFlag(msg.id)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors
                   ${isFlagged ? "text-red-600 bg-red-50" : "text-stone-400 hover:text-red-500 hover:bg-red-50"}`}
               >
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -857,6 +873,13 @@ export default function ChatThread({ chatId, chatObj, simple = false }) {
     } catch { /* ignore */ }
   }, []);
 
+  const toggleSave = useCallback(async (id) => {
+    setMsgList((prev) =>
+      prev.map((m) => m.id !== id ? m : { ...m, saved: !m.saved })
+    );
+    try { await messagesAPI.save(id); } catch { /* ignore */ }
+  }, []);
+
   const toggleFlag = useCallback((id) => {
     setFlaggedIds((prev) => {
       const next = new Set(prev);
@@ -980,6 +1003,7 @@ export default function ChatThread({ chatId, chatObj, simple = false }) {
               onToggleEmoji={toggleEmoji}
               onAddEmoji={addEmoji}
               onToggleHelpful={toggleHelpful}
+              onSave={toggleSave}
               onFlag={toggleFlag}
               onVote={voteOnPoll}
               onAttend={handleAttend}

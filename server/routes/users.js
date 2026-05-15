@@ -99,6 +99,7 @@ router.delete('/:id', auth, async (req, res, next) => {
     await client.query('DELETE FROM scheduler_attendees WHERE user_id=$1', [uid]);
     await client.query('DELETE FROM user_classes WHERE user_id=$1', [uid]);
     await client.query('DELETE FROM saved_posts WHERE user_id=$1', [uid]);
+    await client.query('DELETE FROM saved_messages WHERE user_id=$1', [uid]);
     await client.query('DELETE FROM post_upvotes WHERE user_id=$1', [uid]);
     await client.query('DELETE FROM flags WHERE reported_by=$1', [uid]);
     await client.query('DELETE FROM comments WHERE author_id=$1', [uid]);
@@ -137,6 +138,28 @@ router.get('/:id/saved-posts', auth, async (req, res, next) => {
       [req.params.id, req.user.id]
     );
     res.json({ posts: rows });
+  } catch (err) { next(err); }
+});
+
+// GET /api/users/:id/saved-messages
+router.get('/:id/saved-messages', auth, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic,
+         u.role AS author_role, u.timezone AS author_timezone,
+         c.title AS chat_title, c.id AS chat_id,
+         cl.name AS class_name, cl.id AS class_id,
+         true AS saved
+       FROM messages m
+       JOIN saved_messages sm ON sm.message_id = m.id
+       LEFT JOIN users u  ON u.id = m.author_id
+       LEFT JOIN chats c  ON c.id = m.chat_id
+       LEFT JOIN classes cl ON cl.id = c.class_id
+       WHERE sm.user_id = $1
+       ORDER BY m.created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ messages: rows });
   } catch (err) { next(err); }
 });
 

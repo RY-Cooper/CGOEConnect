@@ -7,6 +7,7 @@ function postQuery(extraWhere, params, currentUserId) {
     `SELECT p.*,
        u.name        AS author_name,
        u.profile_pic AS author_pic,
+       u.timezone    AS author_timezone,
        (SELECT count(*) FROM post_upvotes WHERE post_id = p.id)                             AS upvotes,
        EXISTS(SELECT 1 FROM post_upvotes WHERE post_id = p.id AND user_id = $${params.length + 1}) AS upvoted,
        (SELECT count(*) FROM comments    WHERE post_id = p.id)                             AS comment_count,
@@ -31,6 +32,7 @@ router.get('/', auth, async (req, res, next) => {
       `SELECT p.*,
          u.name        AS author_name,
          u.profile_pic AS author_pic,
+         u.timezone    AS author_timezone,
          (SELECT count(*) FROM post_upvotes WHERE post_id = p.id)                      AS upvotes,
          EXISTS(SELECT 1 FROM post_upvotes WHERE post_id = p.id AND user_id = $1)      AS upvoted,
          (SELECT count(*) FROM comments    WHERE post_id = p.id)                      AS comment_count,
@@ -54,9 +56,10 @@ router.post('/', auth, async (req, res, next) => {
       `INSERT INTO posts (author_id, class_id, chat_id, content) VALUES ($1,$2,$3,$4) RETURNING *`,
       [req.user.id, class_id || null, chat_id || null, content]
     );
-    const { rows: [author] } = await db.query('SELECT name, profile_pic FROM users WHERE id = $1', [req.user.id]);
+    const { rows: [author] } = await db.query('SELECT name, profile_pic, timezone FROM users WHERE id = $1', [req.user.id]);
     res.status(201).json({
       post: { ...post, author_name: author.name, author_pic: author.profile_pic,
+        author_timezone: author.timezone ?? '',
         upvotes: 0, upvoted: false, comment_count: 0, saved: false },
     });
   } catch (err) { next(err); }

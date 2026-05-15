@@ -136,7 +136,13 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, saved
           />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-stone-900">{post.author_name ?? "Unknown"}</p>
-            <p className="text-xs text-stone-400">{timeAgo(post.created_at)}</p>
+            <p className="text-xs text-stone-400">
+              {timeAgo(post.created_at)}
+              {(() => {
+                const tz = post.author_timezone || (post.author_id === currentUser?.id ? currentUser?.timezone : null);
+                return tz ? <span className="ml-1.5 text-stone-300">· {tz}</span> : null;
+              })()}
+            </p>
           </div>
           {post.class_id && (
             <Link

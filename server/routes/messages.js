@@ -117,6 +117,24 @@ router.post('/:id/attend', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/messages/:id/save  — toggle saved
+router.post('/:id/save', auth, async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      'SELECT 1 FROM saved_messages WHERE message_id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (existing.rows.length) {
+      await db.query('DELETE FROM saved_messages WHERE message_id = $1 AND user_id = $2',
+        [req.params.id, req.user.id]);
+    } else {
+      await db.query('INSERT INTO saved_messages (message_id, user_id) VALUES ($1,$2)',
+        [req.params.id, req.user.id]);
+    }
+    res.json({ saved: !existing.rows.length });
+  } catch (err) { next(err); }
+});
+
 // DELETE /api/messages/:id — author, chat moderator, or global moderator
 router.delete('/:id', auth, async (req, res, next) => {
   try {
@@ -128,7 +146,7 @@ router.delete('/:id', auth, async (req, res, next) => {
     if (!msg) return res.status(404).json({ error: 'Message not found' });
     const isAuthor    = msg.author_id    === req.user.id;
     const isChatMod   = msg.moderator_id === req.user.id;
-    const isGlobalMod = req.user.role    === 'moderator';
+    const isGlobalMod = req.user.role === 'moderator' || req.user.role === 'admin';
     if (!isAuthor && !isChatMod && !isGlobalMod) return res.status(403).json({ error: 'Forbidden' });
     await db.query('DELETE FROM messages WHERE id = $1', [req.params.id]);
     res.status(204).send();

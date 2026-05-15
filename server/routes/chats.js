@@ -42,12 +42,13 @@ router.get('/:chatId/messages', auth, async (req, res, next) => {
   const { chatId } = req.params;
   try {
     const { rows: messages } = await db.query(
-      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic, u.role AS author_role
+      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic, u.role AS author_role, u.timezone AS author_timezone,
+         EXISTS(SELECT 1 FROM saved_messages WHERE message_id = m.id AND user_id = $2) AS saved
        FROM messages m
        LEFT JOIN users u ON u.id = m.author_id
        WHERE m.chat_id = $1
        ORDER BY m.created_at ASC`,
-      [chatId]
+      [chatId, req.user.id]
     );
     if (!messages.length) return res.json({ messages: [] });
 
@@ -184,10 +185,11 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    const { rows: [author] } = await db.query('SELECT name, profile_pic, role FROM users WHERE id = $1', [req.user.id]);
+    const { rows: [author] } = await db.query('SELECT name, profile_pic, role, timezone FROM users WHERE id = $1', [req.user.id]);
     res.status(201).json({
       message: { ...msg, author_name: author.name, author_pic: author.profile_pic, author_role: author.role,
-        reactions: [], helpful: 0, markedHelpfulBy: [], poll: null, scheduler: null },
+        author_timezone: author.timezone ?? '',
+        reactions: [], helpful: 0, markedHelpfulBy: [], poll: null, scheduler: null, saved: false },
     });
   } catch (err) {
     await client.query('ROLLBACK');

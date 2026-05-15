@@ -38,7 +38,8 @@ export const usersAPI = {
   delete:     (id)          => req('DELETE', `/users/${id}`),
   enroll:     (id, classId) => req('POST',   `/users/${id}/classes/${classId}`),
   unenroll:   (id, classId) => req('DELETE', `/users/${id}/classes/${classId}`),
-  savedPosts: (id)          => req('GET',    `/users/${id}/saved-posts`),
+  savedPosts:     (id) => req('GET', `/users/${id}/saved-posts`),
+  savedMessages:  (id) => req('GET', `/users/${id}/saved-messages`),
 };
 
 // ── Classes ──────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export const messagesAPI = {
   flag:    (id, reason)   => req('POST',   `/messages/${id}/flag`, { reason }),
   vote:    (id, optionId) => req('POST',   `/messages/${id}/vote`, { optionId }),
   attend:  (id)           => req('POST',   `/messages/${id}/attend`),
+  save:    (id)           => req('POST',   `/messages/${id}/save`),
   remove:  (id)           => req('DELETE', `/messages/${id}`),
 };
 
