@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { flagsAPI, classesAPI } from "../../api";
+import { flagsAPI, classesAPI, usersAPI, messagesAPI, postsAPI, commentsAPI, reviewsAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 
 function timeAgo(dateStr) {
@@ -20,6 +20,12 @@ const TYPE_COLORS = {
   review:  "bg-emerald-100 text-emerald-800",
 };
 
+const ROLE_COLORS = {
+  admin:     "bg-red-100 text-red-700",
+  moderator: "bg-emerald-100 text-emerald-700",
+  student:   "bg-stone-100 text-stone-600",
+};
+
 export default function ModDashboard() {
   const { currentUser } = useAuth();
   const [flags, setFlags] = useState([]);
@@ -27,11 +33,14 @@ export default function ModDashboard() {
   const [toast, setToast] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
 
-  const isModerator = currentUser?.role === "moderator";
-  const isAdmin     = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin";
 
-  const [newClass, setNewClass]   = useState({ id: "", name: "", programs: "" });
-  const [classMsg, setClassMsg]   = useState(null);
+  const [newClass, setNewClass] = useState({ id: "", name: "", programs: "" });
+  const [classMsg, setClassMsg] = useState(null);
+
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState(null);
 
   useEffect(() => {
     flagsAPI.list()
@@ -39,6 +48,21 @@ export default function ModDashboard() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "users" && isAdmin && users.length === 0) {
+      setUsersLoading(true);
+      usersAPI.list()
+        .then(({ users: all }) => setUsers(all))
+        .catch(() => {})
+        .finally(() => setUsersLoading(false));
+    }
+  }, [activeTab, isAdmin]);
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
 
   async function handleCreateClass(e) {
     e.preventDefault();
@@ -55,31 +79,51 @@ export default function ModDashboard() {
     setTimeout(() => setClassMsg(null), 4000);
   }
 
-  const pending  = flags.filter((f) => !f.resolved);
-  const resolved = flags.filter((f) => f.resolved);
-  const displayed = activeTab === "pending" ? pending : resolved;
+  async function handleRoleChange(userId, newRole) {
+    setRoleUpdating(userId);
+    try {
+      const { user } = await usersAPI.updateRole(userId, newRole);
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: user.role } : u));
+      showToast(`Role updated to ${newRole}.`);
+    } catch (err) {
+      showToast(err.message || "Failed to update role");
+    } finally {
+      setRoleUpdating(null);
+    }
+  }
 
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+  async function handleRemoveContent(flag) {
+    try {
+      const { target_type, target_id } = flag;
+      if (target_type === "message")  await messagesAPI.remove(target_id);
+      if (target_type === "post")     await postsAPI.remove(target_id);
+      if (target_type === "comment")  await commentsAPI.remove(target_id);
+      if (target_type === "review")   await reviewsAPI.remove(target_id);
+      await flagsAPI.resolve(flag.id);
+      setFlags((prev) => prev.map((f) => f.id === flag.id ? { ...f, resolved: true, action: "removed" } : f));
+      showToast("Content removed.");
+    } catch (err) {
+      showToast(err.message || "Failed to remove content");
+    }
   }
 
   async function handleResolve(flagId, action) {
+    if (action === "removed") {
+      const flag = flags.find((f) => f.id === flagId);
+      if (flag) return handleRemoveContent(flag);
+    }
     try {
       await flagsAPI.resolve(flagId);
-      setFlags((prev) =>
-        prev.map((f) => f.id === flagId ? { ...f, resolved: true, action } : f)
-      );
-      const messages = {
-        dismissed: "Flag dismissed — content kept.",
-        removed:   "Content removed (simulated — no data was changed).",
-        warned:    "Warning sent to user (simulated).",
-      };
-      showToast(messages[action] ?? "Flag resolved.");
+      setFlags((prev) => prev.map((f) => f.id === flagId ? { ...f, resolved: true, action } : f));
+      showToast(action === "dismissed" ? "Flag dismissed." : "Warning noted.");
     } catch (err) {
       showToast(err.message || "Failed to resolve flag");
     }
   }
+
+  const pending  = flags.filter((f) => !f.resolved);
+  const resolved = flags.filter((f) => f.resolved);
+  const displayed = activeTab === "pending" ? pending : resolved;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -110,54 +154,82 @@ export default function ModDashboard() {
             </div>
           </div>
 
-          {!isModerator && !isAdmin && (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              You are viewing this as a non-moderator. In production this page is restricted to moderators only.
-            </div>
-          )}
-
-          <div className="mt-6 flex items-center gap-2 border-t border-stone-100 pt-5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("pending")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                activeTab === "pending" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"
-              }`}
-            >
+          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-5">
+            <button type="button" onClick={() => setActiveTab("pending")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${activeTab === "pending" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"}`}>
               Pending
               {!loading && pending.length > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                  activeTab === "pending" ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
-                }`}>
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${activeTab === "pending" ? "bg-white/20 text-white" : "bg-red-100 text-red-700"}`}>
                   {pending.length}
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("resolved")}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                activeTab === "resolved" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"
-              }`}
-            >
+            <button type="button" onClick={() => setActiveTab("resolved")}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${activeTab === "resolved" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"}`}>
               Resolved {!loading && `(${resolved.length})`}
             </button>
             {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("classes")}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  activeTab === "classes" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"
-                }`}
-              >
-                Manage Classes
-              </button>
+              <>
+                <button type="button" onClick={() => setActiveTab("users")}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${activeTab === "users" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"}`}>
+                  Manage Users
+                </button>
+                <button type="button" onClick={() => setActiveTab("classes")}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${activeTab === "classes" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"}`}>
+                  Manage Classes
+                </button>
+              </>
             )}
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-8">
+
+        {/* ── Users tab ── */}
+        {activeTab === "users" && isAdmin && (
+          <div>
+            <p className="mb-4 text-sm text-stone-500">
+              Change a user's role to promote them to moderator or admin.
+            </p>
+            {usersLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {users.map((u) => (
+                  <li key={u.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+                    <img
+                      src={u.profile_pic || `https://i.pravatar.cc/150?u=${u.id}`}
+                      alt={u.name}
+                      className="h-9 w-9 rounded-full object-cover shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-stone-900 truncate">{u.name}</p>
+                      <p className="text-xs text-stone-400 truncate">{u.email}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${ROLE_COLORS[u.role] ?? "bg-stone-100 text-stone-600"}`}>
+                      {u.role}
+                    </span>
+                    <select
+                      value={u.role}
+                      disabled={roleUpdating === u.id || u.id === currentUser?.id}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                      className="rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700 focus:border-[#8C1515] focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="student">Student</option>
+                      <option value="moderator">Moderator</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* ── Classes tab ── */}
         {activeTab === "classes" && isAdmin && (
           <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-stone-900 mb-1">Create a class</h2>
@@ -165,55 +237,38 @@ export default function ModDashboard() {
               Add a class to the catalog so students can enroll and create subchats.
             </p>
             {classMsg && (
-              <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
-                classMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
-              }`}>
+              <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${classMsg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>
                 {classMsg.text}
               </div>
             )}
             <form onSubmit={handleCreateClass} className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Class ID</label>
-                <input
-                  type="text"
-                  value={newClass.id}
-                  onChange={(e) => setNewClass((p) => ({ ...p, id: e.target.value }))}
-                  placeholder="e.g. EDUC101"
-                  required
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
-                />
+                <input type="text" value={newClass.id} onChange={(e) => setNewClass((p) => ({ ...p, id: e.target.value }))}
+                  placeholder="e.g. EDUC101" required
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Class name</label>
-                <input
-                  type="text"
-                  value={newClass.name}
-                  onChange={(e) => setNewClass((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Introduction to Education"
-                  required
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
-                />
+                <input type="text" value={newClass.name} onChange={(e) => setNewClass((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Introduction to Education" required
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Programs (comma-separated)</label>
-                <input
-                  type="text"
-                  value={newClass.programs}
-                  onChange={(e) => setNewClass((p) => ({ ...p, programs: e.target.value }))}
+                <input type="text" value={newClass.programs} onChange={(e) => setNewClass((p) => ({ ...p, programs: e.target.value }))}
                   placeholder="e.g. CGOE, HCP, MS"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
-                />
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25" />
               </div>
-              <button
-                type="submit"
-                className="self-start rounded-lg bg-[#8C1515] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#6f1010] transition-colors"
-              >
+              <button type="submit"
+                className="self-start rounded-lg bg-[#8C1515] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#6f1010] transition-colors">
                 Create class
               </button>
             </form>
           </div>
         )}
 
+        {/* ── Flags tabs ── */}
         {(activeTab === "pending" || activeTab === "resolved") && loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
@@ -247,10 +302,8 @@ export default function ModDashboard() {
             ) : (
               <ul className="flex flex-col gap-4">
                 {displayed.map((flag) => (
-                  <li
-                    key={flag.id}
-                    className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-sm ${flag.resolved ? "opacity-60" : ""}`}
-                  >
+                  <li key={flag.id}
+                    className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-sm ${flag.resolved ? "opacity-60" : ""}`}>
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${TYPE_COLORS[flag.target_type] ?? "bg-stone-100 text-stone-700"}`}>
@@ -276,30 +329,21 @@ export default function ModDashboard() {
                       <p className="text-xs font-semibold text-stone-500 mb-1">
                         {flag.target_type.charAt(0).toUpperCase() + flag.target_type.slice(1)} ID:
                       </p>
-                      <p className="text-xs font-mono text-stone-600">{flag.target_id}</p>
+                      <p className="text-xs font-mono text-stone-600 break-all">{flag.target_id}</p>
                     </div>
 
                     {!flag.resolved && (
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleResolve(flag.id, "dismissed")}
-                          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50"
-                        >
+                        <button type="button" onClick={() => handleResolve(flag.id, "dismissed")}
+                          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50">
                           Dismiss
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleResolve(flag.id, "removed")}
-                          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
-                        >
+                        <button type="button" onClick={() => handleResolve(flag.id, "removed")}
+                          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-red-700">
                           Remove content
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleResolve(flag.id, "warned")}
-                          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50"
-                        >
+                        <button type="button" onClick={() => handleResolve(flag.id, "warned")}
+                          className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50">
                           Warn user
                         </button>
                       </div>

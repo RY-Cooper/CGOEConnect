@@ -53,15 +53,19 @@ router.get('/:classId/chats', auth, async (req, res, next) => {
 });
 
 // POST /api/classes/:classId/chats
+// is_channel=true requires admin; subchats open to all authenticated users
 router.post('/:classId/chats', auth, async (req, res, next) => {
-  const { title, tags } = req.body;
+  const { title, tags, is_channel } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
+  if (is_channel && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can create class channels' });
+  }
   try {
     const { rows } = await db.query(
-      `INSERT INTO chats (class_id, title, tags, created_by, moderator_id)
-       VALUES ($1,$2,$3,$4,$4)
+      `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel)
+       VALUES ($1,$2,$3,$4,$4,$5)
        RETURNING *`,
-      [req.params.classId, title, tags || [], req.user.id]
+      [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel)]
     );
     res.status(201).json({ chat: rows[0] });
   } catch (err) { next(err); }

@@ -1,8 +1,33 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at';
+
+// GET /api/users — admin only, list all users
+router.get('/', auth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`SELECT ${USER_COLS} FROM users ORDER BY created_at DESC`);
+    res.json({ users: rows });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/users/:id/role — admin only
+router.patch('/:id/role', auth, requireAdmin, async (req, res, next) => {
+  const { role } = req.body;
+  if (!['student', 'moderator', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'role must be student, moderator, or admin' });
+  }
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET role=$1 WHERE id=$2 RETURNING ${USER_COLS}`,
+      [role, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
 
 async function withClasses(user) {
   const { rows } = await db.query('SELECT class_id FROM user_classes WHERE user_id = $1', [user.id]);

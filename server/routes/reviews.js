@@ -45,4 +45,19 @@ router.post('/:id/flag', auth, async (req, res, next) => {
   }
 });
 
+// DELETE /api/reviews/:id — author, moderator, or admin
+router.delete('/:id', auth, async (req, res, next) => {
+  try {
+    const { rows: [review] } = await db.query('SELECT author_id FROM reviews WHERE id=$1', [req.params.id]);
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+    const isAuthor = review.author_id === req.user.id;
+    const isMod = req.user.role === 'moderator' || req.user.role === 'admin';
+    if (!isAuthor && !isMod) return res.status(403).json({ error: 'Forbidden' });
+    await db.query('DELETE FROM review_helpful WHERE review_id=$1', [req.params.id]);
+    await db.query("DELETE FROM flags WHERE target_type='review' AND target_id=$1", [req.params.id]);
+    await db.query('DELETE FROM reviews WHERE id=$1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

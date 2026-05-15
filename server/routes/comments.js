@@ -24,4 +24,18 @@ router.post('/:id/flag', auth, async (req, res, next) => {
   }
 });
 
+// DELETE /api/comments/:id — author, moderator, or admin
+router.delete('/:id', auth, async (req, res, next) => {
+  try {
+    const { rows: [comment] } = await db.query('SELECT author_id FROM comments WHERE id=$1', [req.params.id]);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+    const isAuthor = comment.author_id === req.user.id;
+    const isMod = req.user.role === 'moderator' || req.user.role === 'admin';
+    if (!isAuthor && !isMod) return res.status(403).json({ error: 'Forbidden' });
+    await db.query("DELETE FROM flags WHERE target_type='comment' AND target_id=$1", [req.params.id]);
+    await db.query('DELETE FROM comments WHERE id=$1', [req.params.id]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

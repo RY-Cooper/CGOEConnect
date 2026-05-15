@@ -31,12 +31,14 @@ export const authAPI = {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersAPI = {
-  get:      (id)           => req('GET',    `/users/${id}`),
-  update:   (id, data)     => req('PUT',    `/users/${id}`, data),
-  delete:   (id)           => req('DELETE', `/users/${id}`),
-  enroll:   (id, classId)  => req('POST',   `/users/${id}/classes/${classId}`),
-  unenroll: (id, classId)  => req('DELETE', `/users/${id}/classes/${classId}`),
-  savedPosts: (id)         => req('GET',    `/users/${id}/saved-posts`),
+  list:       ()            => req('GET',    '/users'),
+  get:        (id)          => req('GET',    `/users/${id}`),
+  update:     (id, data)    => req('PUT',    `/users/${id}`, data),
+  updateRole: (id, role)    => req('PATCH',  `/users/${id}/role`, { role }),
+  delete:     (id)          => req('DELETE', `/users/${id}`),
+  enroll:     (id, classId) => req('POST',   `/users/${id}/classes/${classId}`),
+  unenroll:   (id, classId) => req('DELETE', `/users/${id}/classes/${classId}`),
+  savedPosts: (id)          => req('GET',    `/users/${id}/saved-posts`),
 };
 
 // ── Classes ──────────────────────────────────────────────────────────────────
@@ -83,13 +85,15 @@ export const postsAPI = {
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 export const reviewsAPI = {
-  helpful: (id)          => req('POST', `/reviews/${id}/helpful`),
-  flag:    (id, reason)  => req('POST', `/reviews/${id}/flag`, { reason }),
+  helpful: (id)          => req('POST',   `/reviews/${id}/helpful`),
+  flag:    (id, reason)  => req('POST',   `/reviews/${id}/flag`, { reason }),
+  remove:  (id)          => req('DELETE', `/reviews/${id}`),
 };
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 export const commentsAPI = {
-  flag: (id, reason) => req('POST', `/comments/${id}/flag`, { reason }),
+  flag:   (id, reason) => req('POST',   `/comments/${id}/flag`, { reason }),
+  remove: (id)         => req('DELETE', `/comments/${id}`),
 };
 
 // ── Resources ─────────────────────────────────────────────────────────────────
