@@ -113,27 +113,75 @@ router.get('/:classId/chats', auth, async (req, res, next) => {
        ORDER BY c.pinned DESC, c.created_at ASC`,
       [req.params.classId]
     );
-    res.json({ chats: rows });
+
+    // Enrich with membership — gracefully skip if new tables don't exist yet
+    let enriched = rows.map(c => ({ ...c, is_member: c.created_by === req.user.id, request_status: null }));
+    if (rows.length) {
+      const ids = rows.map(c => c.id);
+      try {
+        const [memRows, reqRows] = await Promise.all([
+          db.query(`SELECT chat_id FROM chat_members WHERE chat_id = ANY($1::uuid[]) AND user_id = $2`, [ids, req.user.id]),
+          db.query(`SELECT DISTINCT ON (chat_id) chat_id, status FROM chat_join_requests WHERE chat_id = ANY($1::uuid[]) AND user_id = $2 ORDER BY chat_id, created_at DESC`, [ids, req.user.id]),
+        ]);
+        const memberSet = new Set(memRows.rows.map(r => r.chat_id));
+        const reqMap = {};
+        for (const r of reqRows.rows) reqMap[r.chat_id] = r.status;
+        enriched = rows.map(c => ({
+          ...c,
+          is_member: c.created_by === req.user.id || memberSet.has(c.id),
+          request_status: reqMap[c.id] ?? null,
+        }));
+      } catch { /* tables may not exist yet */ }
+    }
+    res.json({ chats: enriched });
   } catch (err) { next(err); }
 });
 
 // POST /api/classes/:classId/chats
 // is_channel=true requires admin; subchats open to all authenticated users
 router.post('/:classId/chats', auth, async (req, res, next) => {
-  const { title, tags, is_channel } = req.body;
+  const { title, tags, is_channel, is_private } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   if (is_channel && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Only admins can create class channels' });
   }
+  const client = await db.connect();
   try {
-    const { rows } = await db.query(
-      `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel)
-       VALUES ($1,$2,$3,$4,$4,$5)
-       RETURNING *`,
-      [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel)]
-    );
-    res.status(201).json({ chat: rows[0] });
-  } catch (err) { next(err); }
+    await client.query('BEGIN');
+    // Try with is_private column; fall back if it doesn't exist yet
+    let chat;
+    try {
+      const { rows: [c] } = await client.query(
+        `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel, is_private)
+         VALUES ($1,$2,$3,$4,$4,$5,$6)
+         RETURNING *`,
+        [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel), Boolean(is_private)]
+      );
+      chat = c;
+    } catch {
+      const { rows: [c] } = await client.query(
+        `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel)
+         VALUES ($1,$2,$3,$4,$4,$5)
+         RETURNING *`,
+        [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel)]
+      );
+      chat = c;
+    }
+    // Auto-add creator as member (skip if table doesn't exist)
+    try {
+      await client.query(
+        'INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [chat.id, req.user.id]
+      );
+    } catch { /* chat_members table may not exist yet */ }
+    await client.query('COMMIT');
+    res.status(201).json({ chat: { ...chat, is_member: true, request_status: null } });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // GET /api/classes/:classId/resources

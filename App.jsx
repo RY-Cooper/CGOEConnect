@@ -30,6 +30,7 @@ import SavedPosts     from "./pages/feed/SavedPosts";
 import ClassReviews   from "./pages/reviews/ClassReviews";
 import ModDashboard   from "./pages/moderation/ModDashboard";
 import ManageClasses  from "./pages/admin/ManageClasses";
+import MySubchats     from "./pages/subchats/MySubchats";
 
 // ── Auth guard (uses fake auth state from localStorage) ────
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -88,6 +89,9 @@ function AuthBootLoader() {
 
         {/* ── Admin ── */}
         <Route path="/admin/classes" element={<PrivateRoute><ManageClasses /></PrivateRoute>} />
+
+        {/* ── My Subchats ── */}
+        <Route path="/my-subchats" element={<PrivateRoute><MySubchats /></PrivateRoute>} />
 
         {/* ── Fallback ── */}
         <Route path="*" element={<Navigate to="/" replace />} />

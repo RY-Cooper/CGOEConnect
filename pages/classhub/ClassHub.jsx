@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useParams } from "react-router-dom";
-import { classesAPI } from "../../api";
+import { classesAPI, chatsAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 import { useAuth } from "../../context/AuthContext";
 
@@ -12,13 +12,32 @@ function tagVariant(tag) {
   return "bg-stone-100 text-stone-700";
 }
 
-function ChatItem({ ch, base, label }) {
+function ChatItem({ ch, base, label, currentUserId }) {
   const [open, setOpen] = useState(false);
+  const [requestStatus, setRequestStatus] = useState(ch.request_status ?? null);
+  const [requesting, setRequesting] = useState(false);
+
   const created = ch.created_at
     ? new Date(ch.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
     : null;
   const tag = ch.tags?.[0] ?? "";
   const routeSegment = ch.is_channel ? "channel" : "subchat";
+
+  const isCreator = ch.created_by === currentUserId;
+  const isMember  = Boolean(ch.is_member) || isCreator;
+  const canOpen   = !ch.is_private || isMember;
+
+  async function handleJoinRequest() {
+    setRequesting(true);
+    try {
+      await chatsAPI.joinRequest(ch.id);
+      setRequestStatus("pending");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setRequesting(false);
+    }
+  }
 
   return (
     <li className="rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
@@ -41,22 +60,60 @@ function ChatItem({ ch, base, label }) {
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${tagVariant(tag)}`}>
               {tag || "Chat"}
             </span>
+            {ch.is_private && (
+              <span className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                Private
+              </span>
+            )}
+            {isMember && ch.is_private && (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Member</span>
+            )}
           </span>
           <span className="mt-1 block font-medium text-stone-900">{ch.title}</span>
         </span>
       </button>
+
       {open && (
         <div className="border-t border-stone-100 px-4 py-3 pl-12 bg-stone-50/80">
           <p className="text-sm text-stone-600">
             {created && <span>Started {created} · </span>}
-            Open the thread to read and reply.
+            {canOpen
+              ? "Open the thread to read and reply."
+              : "This is a private subchat. Request to join to participate."}
           </p>
-          <Link
-            to={`${base}/${routeSegment}/${ch.id}`}
-            className="mt-3 inline-flex rounded-lg bg-[#8C1515] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f1010]"
-          >
-            Open {label}
-          </Link>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canOpen ? (
+              <Link
+                to={`${base}/${routeSegment}/${ch.id}`}
+                className="inline-flex rounded-lg bg-[#8C1515] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f1010]"
+              >
+                Open {label}
+              </Link>
+            ) : requestStatus === "pending" ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-4 py-2 text-sm font-medium text-stone-500">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Request pending
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleJoinRequest}
+                disabled={requesting}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#8C1515] px-4 py-2 text-sm font-semibold text-[#8C1515] hover:bg-[#8C1515]/5 disabled:opacity-50"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                {requesting ? "Sending…" : "Request to join"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </li>
@@ -64,15 +121,20 @@ function ChatItem({ ch, base, label }) {
 }
 
 function NewChatModal({ classId, isChannel, onCreated, onClose }) {
-  const [title, setTitle] = useState("");
-  const [saving, setSaving] = useState("");
+  const [title, setTitle]         = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [saving, setSaving]       = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
     try {
-      const { chat } = await classesAPI.createChat(classId, { title: title.trim(), is_channel: isChannel });
+      const { chat } = await classesAPI.createChat(classId, {
+        title: title.trim(),
+        is_channel: isChannel,
+        is_private: !isChannel && isPrivate,
+      });
       onCreated(chat);
     } catch (err) {
       alert(err.message);
@@ -99,6 +161,36 @@ function NewChatModal({ classId, isChannel, onCreated, onClose }) {
               autoFocus
             />
           </div>
+
+          {!isChannel && (
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-2">Privacy</label>
+              <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsPrivate(false)}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    !isPrivate ? "bg-[#8C1515] text-white" : "bg-white text-stone-600 hover:bg-stone-50"
+                  }`}
+                >
+                  Open
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrivate(true)}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors border-l border-stone-200 ${
+                    isPrivate ? "bg-[#8C1515] text-white" : "bg-white text-stone-600 hover:bg-stone-50"
+                  }`}
+                >
+                  Private
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-stone-400">
+                {isPrivate ? "Others must request to join." : "Anyone in the class can join."}
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100">
               Cancel
@@ -126,7 +218,7 @@ export default function ClassHub() {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [modal, setModal] = useState(null); // null | "channel" | "subchat"
+  const [modal, setModal] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -248,7 +340,7 @@ export default function ClassHub() {
             <h2 className="text-lg font-semibold text-stone-900 mb-3">Channels</h2>
             <ul className="flex flex-col gap-2">
               {channels.map((ch) => (
-                <ChatItem key={ch.id} ch={ch} base={base} label="channel" />
+                <ChatItem key={ch.id} ch={ch} base={base} label="channel" currentUserId={currentUser?.id} />
               ))}
             </ul>
           </section>
@@ -263,7 +355,7 @@ export default function ClassHub() {
           ) : (
             <ul className="flex flex-col gap-2">
               {subchats.map((ch) => (
-                <ChatItem key={ch.id} ch={ch} base={base} label="subchat" />
+                <ChatItem key={ch.id} ch={ch} base={base} label="subchat" currentUserId={currentUser?.id} />
               ))}
             </ul>
           )}

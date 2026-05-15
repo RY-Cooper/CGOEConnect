@@ -34,6 +34,21 @@ async function withClasses(user) {
   return { ...user, classes: rows.map(r => r.class_id) };
 }
 
+// GET /api/users/search?q=name — search users by name (any authenticated user)
+router.get('/search', auth, async (req, res, next) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2) return res.json({ users: [] });
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, profile_pic, program FROM users
+       WHERE name ILIKE $1
+       ORDER BY name ASC LIMIT 20`,
+      [`%${q.trim()}%`]
+    );
+    res.json({ users: rows });
+  } catch (err) { next(err); }
+});
+
 // GET /api/users/:id
 router.get('/:id', auth, async (req, res, next) => {
   try {

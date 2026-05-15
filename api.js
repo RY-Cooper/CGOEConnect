@@ -38,8 +38,9 @@ export const usersAPI = {
   delete:     (id)          => req('DELETE', `/users/${id}`),
   enroll:     (id, classId) => req('POST',   `/users/${id}/classes/${classId}`),
   unenroll:   (id, classId) => req('DELETE', `/users/${id}/classes/${classId}`),
-  savedPosts:     (id) => req('GET', `/users/${id}/saved-posts`),
-  savedMessages:  (id) => req('GET', `/users/${id}/saved-messages`),
+  savedPosts:     (id) => req('GET',  `/users/${id}/saved-posts`),
+  savedMessages:  (id) => req('GET',  `/users/${id}/saved-messages`),
+  search:         (q)  => req('GET',  `/users/search?q=${encodeURIComponent(q)}`),
 };
 
 // ── Classes ──────────────────────────────────────────────────────────────────
@@ -56,11 +57,18 @@ export const classesAPI = {
 
 // ── Chats ─────────────────────────────────────────────────────────────────────
 export const chatsAPI = {
-  general:    ()        => req('GET',  '/chats/general'),
-  get:        (id)      => req('GET',  `/chats/${id}`),
-  messages:   (chatId)  => req('GET',  `/chats/${chatId}/messages`),
-  postMessage:(chatId, data) => req('POST', `/chats/${chatId}/messages`, data),
-  remove:     (id)      => req('DELETE', `/chats/${id}`),
+  general:        ()                   => req('GET',    '/chats/general'),
+  mine:           ()                   => req('GET',    '/chats/mine'),
+  get:            (id)                 => req('GET',    `/chats/${id}`),
+  messages:       (chatId)             => req('GET',    `/chats/${chatId}/messages`),
+  postMessage:    (chatId, data)       => req('POST',   `/chats/${chatId}/messages`, data),
+  remove:         (id)                 => req('DELETE', `/chats/${id}`),
+  members:        (id)                 => req('GET',    `/chats/${id}/members`),
+  addMember:      (id, userId)         => req('POST',   `/chats/${id}/members`, { userId }),
+  removeMember:   (id, userId)         => req('DELETE', `/chats/${id}/members/${userId}`),
+  joinRequest:    (id)                 => req('POST',   `/chats/${id}/join-request`),
+  joinRequests:   (id)                 => req('GET',    `/chats/${id}/join-requests`),
+  respondRequest: (id, requestId, action) => req('PATCH', `/chats/${id}/join-requests/${requestId}`, { action }),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────

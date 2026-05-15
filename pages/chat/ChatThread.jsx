@@ -937,7 +937,9 @@ export default function ChatThread({ chatId, chatObj, simple = false }) {
   }, [currentUser]);
 
   async function handleNewPost({ text, imageUrl, poll, scheduler }) {
-    if (!currentUser || !text.trim()) return;
+    const hasPoll = poll?.question && Array.isArray(poll?.options) && poll.options.some(o => o.trim());
+    const hasScheduler = Boolean(scheduler?.title?.trim());
+    if (!currentUser || (!text.trim() && !imageUrl && !hasPoll && !hasScheduler)) return;
     try {
       await chatsAPI.postMessage(chatId, {
         content: text,

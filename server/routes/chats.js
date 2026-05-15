@@ -2,6 +2,31 @@ const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 
+// Returns true if user can access chat; writes 403/404 to res and returns false otherwise.
+async function assertAccess(chatId, userId, res) {
+  try {
+    const { rows: [chat] } = await db.query(
+      'SELECT is_private, created_by FROM chats WHERE id = $1', [chatId]
+    );
+    if (!chat) { res.status(404).json({ error: 'Chat not found' }); return false; }
+    if (!chat.is_private || chat.created_by === userId) return true;
+    try {
+      const { rows: [member] } = await db.query(
+        'SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chatId, userId]
+      );
+      if (member) return true;
+    } catch {
+      // chat_members table may not exist yet — allow access
+      return true;
+    }
+    res.status(403).json({ error: 'Access denied', code: 'NOT_MEMBER' });
+    return false;
+  } catch {
+    // is_private column may not exist yet — allow access
+    return true;
+  }
+}
+
 // GET /api/chats/general  — must come before /:id
 router.get('/general', auth, async (req, res, next) => {
   try {
@@ -22,6 +47,62 @@ router.get('/general', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/chats/mine — subchats created by current user (must come before /:id)
+router.get('/mine', auth, async (req, res, next) => {
+  try {
+    let rows;
+    try {
+      const result = await db.query(
+        `SELECT c.*,
+           u.name AS created_by_name, u.profile_pic AS created_by_pic,
+           cl.name AS class_name
+         FROM chats c
+         LEFT JOIN users u ON u.id = c.created_by
+         LEFT JOIN classes cl ON cl.id = c.class_id
+         WHERE c.created_by = $1 AND (c.is_channel = false OR c.is_channel IS NULL)
+         ORDER BY c.created_at DESC`,
+        [req.user.id]
+      );
+      rows = result.rows;
+    } catch {
+      // is_channel column may not exist yet — fall back to simpler query
+      const result = await db.query(
+        `SELECT c.*,
+           u.name AS created_by_name, u.profile_pic AS created_by_pic,
+           cl.name AS class_name
+         FROM chats c
+         LEFT JOIN users u ON u.id = c.created_by
+         LEFT JOIN classes cl ON cl.id = c.class_id
+         WHERE c.created_by = $1
+         ORDER BY c.created_at DESC`,
+        [req.user.id]
+      );
+      rows = result.rows;
+    }
+
+    // Enrich with member/request counts — gracefully skip if tables don't exist yet
+    let memberCounts = {}, pendingCounts = {};
+    if (rows.length) {
+      const ids = rows.map(c => c.id);
+      try {
+        const [mc, pc] = await Promise.all([
+          db.query('SELECT chat_id, count(*) FROM chat_members WHERE chat_id = ANY($1::uuid[]) GROUP BY chat_id', [ids]),
+          db.query(`SELECT chat_id, count(*) FROM chat_join_requests WHERE chat_id = ANY($1::uuid[]) AND status = 'pending' GROUP BY chat_id`, [ids]),
+        ]);
+        for (const r of mc.rows) memberCounts[r.chat_id] = Number(r.count);
+        for (const r of pc.rows) pendingCounts[r.chat_id] = Number(r.count);
+      } catch { /* tables may not exist yet — counts default to 0 */ }
+    }
+
+    const enriched = rows.map(c => ({
+      ...c,
+      member_count: memberCounts[c.id] ?? 0,
+      pending_requests: pendingCounts[c.id] ?? 0,
+    }));
+    res.json({ chats: enriched });
+  } catch (err) { next(err); }
+});
+
 // GET /api/chats/:id
 router.get('/:id', auth, async (req, res, next) => {
   try {
@@ -33,7 +114,20 @@ router.get('/:id', auth, async (req, res, next) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Chat not found' });
-    res.json({ chat: rows[0] });
+    const chat = rows[0];
+
+    let is_member = chat.created_by === req.user.id;
+    let request_status = null;
+    try {
+      const [memRow, reqRow] = await Promise.all([
+        db.query('SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, req.user.id]),
+        db.query(`SELECT status FROM chat_join_requests WHERE chat_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 1`, [chat.id, req.user.id]),
+      ]);
+      if (memRow.rows.length) is_member = true;
+      request_status = reqRow.rows[0]?.status ?? null;
+    } catch { /* tables may not exist yet */ }
+
+    res.json({ chat: { ...chat, is_member, request_status } });
   } catch (err) { next(err); }
 });
 
@@ -41,15 +135,28 @@ router.get('/:id', auth, async (req, res, next) => {
 router.get('/:chatId/messages', auth, async (req, res, next) => {
   const { chatId } = req.params;
   try {
+    if (!await assertAccess(chatId, req.user.id, res)) return;
+
     const { rows: messages } = await db.query(
-      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic, u.role AS author_role, u.timezone AS author_timezone,
-         EXISTS(SELECT 1 FROM saved_messages WHERE message_id = m.id AND user_id = $2) AS saved
+      `SELECT m.*, u.name AS author_name, u.profile_pic AS author_pic, u.role AS author_role, u.timezone AS author_timezone
        FROM messages m
        LEFT JOIN users u ON u.id = m.author_id
        WHERE m.chat_id = $1
        ORDER BY m.created_at ASC`,
-      [chatId, req.user.id]
+      [chatId]
     );
+
+    // Enrich with saved status — gracefully skip if table doesn't exist yet
+    let savedSet = new Set();
+    if (messages.length) {
+      try {
+        const { rows: sv } = await db.query(
+          `SELECT message_id FROM saved_messages WHERE message_id = ANY($1::uuid[]) AND user_id = $2`,
+          [messages.map(m => m.id), req.user.id]
+        );
+        for (const r of sv) savedSet.add(r.message_id);
+      } catch { /* saved_messages table may not exist yet */ }
+    }
     if (!messages.length) return res.json({ messages: [] });
 
     const ids = messages.map(m => m.id);
@@ -97,7 +204,6 @@ router.get('/:chatId/messages', auth, async (req, res, next) => {
       ),
     ]);
 
-    // Build lookup maps
     const byReaction = {};
     for (const r of reactRows.rows) {
       (byReaction[r.message_id] ||= []).push({ emoji: r.emoji, userIds: r.user_ids });
@@ -125,18 +231,23 @@ router.get('/:chatId/messages', auth, async (req, res, next) => {
       markedHelpfulBy: byHelpful[m.id] || [],
       poll:            byPoll[m.id] || null,
       scheduler:       bySched[m.id] || null,
+      saved:           savedSet.has(m.id),
     }));
 
     res.json({ messages: enriched });
   } catch (err) { next(err); }
 });
 
-// DELETE /api/chats/:id — admin only
+// DELETE /api/chats/:id — admin or subchat creator
 router.delete('/:id', auth, async (req, res, next) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   try {
-    const { rows: [chat] } = await db.query('SELECT id FROM chats WHERE id = $1', [req.params.id]);
+    const { rows: [chat] } = await db.query(
+      'SELECT id, created_by, is_channel FROM chats WHERE id = $1', [req.params.id]
+    );
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    const isAdmin   = req.user.role === 'admin';
+    const isCreator = chat.created_by === req.user.id && !chat.is_channel;
+    if (!isAdmin && !isCreator) return res.status(403).json({ error: 'Forbidden' });
     await db.query('DELETE FROM chats WHERE id = $1', [req.params.id]);
     res.status(204).send();
   } catch (err) { next(err); }
@@ -146,7 +257,11 @@ router.delete('/:id', auth, async (req, res, next) => {
 router.post('/:chatId/messages', auth, async (req, res, next) => {
   const { chatId } = req.params;
   const { content, imageUrl, poll, scheduler } = req.body;
-  if (!content) return res.status(400).json({ error: 'content is required' });
+  const hasPoll = poll?.question && Array.isArray(poll.options) && poll.options.length;
+  const hasScheduler = Boolean(scheduler?.title);
+  if (!content && !hasPoll && !hasScheduler) return res.status(400).json({ error: 'content, poll, or scheduler is required' });
+
+  if (!await assertAccess(chatId, req.user.id, res)) return;
 
   const client = await db.connect();
   try {
@@ -155,7 +270,7 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
     const { rows: [msg] } = await client.query(
       `INSERT INTO messages (chat_id, author_id, content, image_url)
        VALUES ($1,$2,$3,$4) RETURNING *`,
-      [chatId, req.user.id, content, imageUrl || null]
+      [chatId, req.user.id, content || '', imageUrl || null]
     );
 
     if (poll?.question && Array.isArray(poll.options) && poll.options.length) {
@@ -197,6 +312,139 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// GET /api/chats/:id/members — creator or admin only
+router.get('/:id/members', auth, async (req, res, next) => {
+  try {
+    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only the creator can view members' });
+    }
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.profile_pic, u.program, cm.joined_at
+       FROM chat_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.chat_id = $1
+       ORDER BY cm.joined_at ASC`,
+      [req.params.id]
+    );
+    res.json({ members: rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/chats/:id/members — add member by userId (creator or admin)
+router.post('/:id/members', auth, async (req, res, next) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  try {
+    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only the creator can add members' });
+    }
+    const { rows: [user] } = await db.query('SELECT id, name, profile_pic, program FROM users WHERE id = $1', [userId]);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await db.query(
+      'INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [req.params.id, userId]
+    );
+    await db.query(
+      `UPDATE chat_join_requests SET status = 'accepted' WHERE chat_id = $1 AND user_id = $2`,
+      [req.params.id, userId]
+    );
+    res.status(201).json({ member: { ...user, joined_at: new Date().toISOString() } });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/chats/:id/members/:userId — remove member (creator or admin)
+router.delete('/:id/members/:userId', auth, async (req, res, next) => {
+  try {
+    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only the creator can remove members' });
+    }
+    if (req.params.userId === chat.created_by) {
+      return res.status(400).json({ error: 'Cannot remove the creator' });
+    }
+    await db.query('DELETE FROM chat_members WHERE chat_id = $1 AND user_id = $2', [req.params.id, req.params.userId]);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
+// POST /api/chats/:id/join-request — request to join a private chat
+router.post('/:id/join-request', auth, async (req, res, next) => {
+  try {
+    const { rows: [chat] } = await db.query('SELECT id, is_private, created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (!chat.is_private) return res.status(400).json({ error: 'Chat is not private' });
+    if (chat.created_by === req.user.id) return res.status(400).json({ error: 'You are the creator' });
+
+    const { rows: [member] } = await db.query(
+      'SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2', [chat.id, req.user.id]
+    );
+    if (member) return res.status(400).json({ error: 'Already a member' });
+
+    await db.query(
+      `INSERT INTO chat_join_requests (chat_id, user_id)
+       VALUES ($1,$2)
+       ON CONFLICT (chat_id, user_id) DO UPDATE SET status = 'pending', created_at = NOW()`,
+      [chat.id, req.user.id]
+    );
+    res.status(201).json({ status: 'pending' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/chats/:id/join-requests — list pending requests (creator or admin)
+router.get('/:id/join-requests', auth, async (req, res, next) => {
+  try {
+    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only the creator can view requests' });
+    }
+    const { rows } = await db.query(
+      `SELECT jr.id, jr.status, jr.created_at,
+         u.id AS user_id, u.name AS user_name, u.profile_pic AS user_pic, u.program AS user_program
+       FROM chat_join_requests jr
+       JOIN users u ON u.id = jr.user_id
+       WHERE jr.chat_id = $1 AND jr.status = 'pending'
+       ORDER BY jr.created_at ASC`,
+      [req.params.id]
+    );
+    res.json({ requests: rows });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/chats/:id/join-requests/:requestId — accept or deny
+router.patch('/:id/join-requests/:requestId', auth, async (req, res, next) => {
+  const { action } = req.body;
+  if (!['accept', 'deny'].includes(action)) {
+    return res.status(400).json({ error: 'action must be accept or deny' });
+  }
+  try {
+    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only the creator can respond to requests' });
+    }
+    const status = action === 'accept' ? 'accepted' : 'denied';
+    const { rows: [jr] } = await db.query(
+      `UPDATE chat_join_requests SET status = $1 WHERE id = $2 AND chat_id = $3 RETURNING user_id`,
+      [status, req.params.requestId, req.params.id]
+    );
+    if (!jr) return res.status(404).json({ error: 'Request not found' });
+    if (action === 'accept') {
+      await db.query(
+        'INSERT INTO chat_members (chat_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [req.params.id, jr.user_id]
+      );
+    }
+    res.json({ status });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

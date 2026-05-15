@@ -2,6 +2,60 @@ import { useState, useEffect } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { classesAPI, chatsAPI, postsAPI } from "../../api";
 import { useAuth } from "../../context/AuthContext";
+
+function PrivateAccessGate({ chat, currentUserId, onRequestSent }) {
+  const [status, setStatus] = useState(chat.request_status ?? null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleRequest() {
+    setLoading(true);
+    try {
+      await chatsAPI.joinRequest(chat.id);
+      setStatus("pending");
+      onRequestSent?.();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-stone-100">
+        <svg className="h-8 w-8 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h2 className="text-lg font-semibold text-stone-900">Private subchat</h2>
+      <p className="mt-2 max-w-xs text-sm text-stone-500">
+        This subchat is private. The creator must approve your request before you can read or post.
+      </p>
+      <div className="mt-6">
+        {status === "pending" ? (
+          <div className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-5 py-3 text-sm font-medium text-stone-500">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Request pending — waiting for approval
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleRequest}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#8C1515] px-5 py-3 text-sm font-semibold text-white hover:bg-[#6f1010] disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            {loading ? "Sending request…" : "Request to join"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 import ChatThread from "../chat/ChatThread";
 import TopNav from "../../components/TopNav";
 
@@ -249,29 +303,34 @@ export default function Subchat() {
       </header>
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
-        {subchatPosts.length > 0 && (
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-              </svg>
-              Posts &amp; replies
-            </h2>
-            <div className="flex flex-col gap-4">
-              {subchatPosts.map((post) => (
-                <SubchatPostCard
-                  key={post.id}
-                  post={post}
-                  currentUser={currentUser}
-                  initialOpen={hash === `#post-${post.id}`}
-                />
-              ))}
-            </div>
-            <div className="mt-6 border-t border-stone-200" />
-          </section>
+        {chat.is_private && !chat.is_member && chat.created_by !== currentUser?.id ? (
+          <PrivateAccessGate chat={chat} currentUserId={currentUser?.id} />
+        ) : (
+          <>
+            {subchatPosts.length > 0 && (
+              <section>
+                <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                  </svg>
+                  Posts &amp; replies
+                </h2>
+                <div className="flex flex-col gap-4">
+                  {subchatPosts.map((post) => (
+                    <SubchatPostCard
+                      key={post.id}
+                      post={post}
+                      currentUser={currentUser}
+                      initialOpen={hash === `#post-${post.id}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-6 border-t border-stone-200" />
+              </section>
+            )}
+            <ChatThread chatId={chatId} chatObj={chat} />
+          </>
         )}
-
-        <ChatThread chatId={chatId} chatObj={chat} />
       </main>
     </div>
   );

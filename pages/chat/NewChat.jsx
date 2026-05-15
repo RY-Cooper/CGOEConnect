@@ -28,6 +28,7 @@ export default function NewChat() {
   const [classId, setClassId] = useState("");
   const [tag, setTag] = useState("General");
   const [description, setDescription] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,6 +55,7 @@ export default function NewChat() {
         title: title.trim(),
         tags: [tag],
         description: description.trim() || undefined,
+        is_private: isPrivate,
       });
       navigate(`/class/${encodeURIComponent(classId)}/subchat/${chat.id}`, { replace: true });
     } catch (err) {
@@ -165,6 +167,36 @@ export default function NewChat() {
                 className="w-full resize-none rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/20 transition"
               />
             </div>
+          </section>
+
+          {/* Privacy */}
+          <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+            <label className="block text-sm font-semibold text-stone-800 mb-3">Privacy</label>
+            <div className="flex rounded-xl border border-stone-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsPrivate(false)}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                  !isPrivate ? "bg-[#8C1515] text-white" : "bg-white text-stone-600 hover:bg-stone-50"
+                }`}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPrivate(true)}
+                className={`flex-1 py-3 text-sm font-medium transition-colors border-l border-stone-200 ${
+                  isPrivate ? "bg-[#8C1515] text-white" : "bg-white text-stone-600 hover:bg-stone-50"
+                }`}
+              >
+                Private
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-stone-400">
+              {isPrivate
+                ? "Only people you approve can read and post in this subchat."
+                : "Anyone enrolled in the class can read and post in this subchat."}
+            </p>
           </section>
 
           {/* Rules reminder */}
