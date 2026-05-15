@@ -68,12 +68,26 @@ function NewChatModal({ classId, onCreated, onClose }) {
   );
 }
 
-function ClassRow({ cls }) {
+function ClassRow({ cls, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const [chats, setChats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [deletingClass, setDeletingClass] = useState(false);
+
+  async function handleDeleteClass(e) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${cls.name}" and all its chats, reviews, and resources? This cannot be undone.`)) return;
+    setDeletingClass(true);
+    try {
+      await classesAPI.remove(cls.id);
+      onDelete(cls.id);
+    } catch (err) {
+      alert(err.message);
+      setDeletingClass(false);
+    }
+  }
 
   async function loadChats() {
     if (chats !== null) return;
@@ -126,13 +140,22 @@ function ClassRow({ cls }) {
           <span className="block font-semibold text-stone-900">{cls.name}</span>
           <span className="text-xs text-stone-400">{cls.id} · {(cls.programs ?? []).join(", ") || "No programs"}</span>
         </span>
-        <Link
-          to={`/class/${encodeURIComponent(cls.id)}`}
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 transition-colors"
-        >
-          View hub
-        </Link>
+        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Link
+            to={`/class/${encodeURIComponent(cls.id)}`}
+            className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+          >
+            View hub
+          </Link>
+          <button
+            type="button"
+            onClick={handleDeleteClass}
+            disabled={deletingClass}
+            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            {deletingClass ? "Deleting…" : "Delete"}
+          </button>
+        </div>
       </button>
 
       {expanded && (
@@ -349,7 +372,11 @@ export default function ManageClasses() {
           ) : (
             <ul className="flex flex-col gap-3">
               {classes.map((cls) => (
-                <ClassRow key={cls.id} cls={cls} />
+                <ClassRow
+                  key={cls.id}
+                  cls={cls}
+                  onDelete={(id) => setClasses((prev) => prev.filter((c) => c.id !== id))}
+                />
               ))}
             </ul>
           )}

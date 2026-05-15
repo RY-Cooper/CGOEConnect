@@ -1,8 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { classesAPI, postsAPI } from "../../api";
 import TopNav from "../../components/TopNav";
+
+function AdminClassItem({ cls, onDelete }) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`Delete "${cls.name}" and all its chats, reviews, and resources? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await classesAPI.remove(cls.id);
+      onDelete(cls.id);
+    } catch (err) {
+      alert(err.message);
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <li className="flex items-center gap-2 rounded-lg px-2.5 py-2 group hover:bg-stone-50 transition-colors">
+      <Link
+        to={`/class/${encodeURIComponent(cls.id)}`}
+        className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-stone-700 hover:text-[#8C1515]"
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full bg-[#8C1515]" />
+        <span className="truncate">{cls.name.split("–")[0].trim()}</span>
+      </Link>
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+        className="shrink-0 rounded px-1.5 py-0.5 text-xs text-stone-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 transition-all"
+        title="Delete class"
+      >
+        {deleting ? "…" : "✕"}
+      </button>
+    </li>
+  );
+}
 
 function PostComposer({ currentUser, onPost }) {
   const [text, setText] = useState("");
@@ -243,7 +280,9 @@ export default function Feed() {
   const [reportedPostIds, setReportedPostIds] = useState(new Set());
   const [openCommentIds, setOpenCommentIds] = useState(new Set());
   const [showClassPicker, setShowClassPicker] = useState(false);
+  const [showAllClasses, setShowAllClasses] = useState(false);
   const [toast, setToast] = useState(null);
+  const CLASS_LIMIT = 5;
 
   useEffect(() => {
     Promise.all([postsAPI.feed(), classesAPI.list()])
@@ -396,10 +435,7 @@ export default function Feed() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-stone-700">Active classes</h2>
               {isAdmin ? (
-                <Link
-                  to="/admin/classes"
-                  className="text-xs font-medium text-[#8C1515] hover:underline"
-                >
+                <Link to="/admin/classes" className="text-xs font-medium text-[#8C1515] hover:underline">
                   Manage
                 </Link>
               ) : (
@@ -413,49 +449,90 @@ export default function Feed() {
               )}
             </div>
 
-            {hubs.length === 0 ? (
-              <p className="py-3 text-center text-xs text-stone-400">No classes yet.</p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {hubs.map((h) => (
-                  <li key={h.id}>
-                    <Link
-                      to={`/class/${encodeURIComponent(h.id)}`}
-                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-[#8C1515] transition-colors"
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-[#8C1515]" />
-                      <span className="truncate">{h.name.split("–")[0].trim()}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {!isAdmin && showClassPicker && catalogClasses.length > 0 && (
-              <div className="mt-3 border-t border-stone-100 pt-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Catalog</p>
-                <div className="flex flex-col gap-1.5">
-                  {catalogClasses.map((cls) => {
-                    const enrolled = selectedClassIds.includes(cls.id);
-                    return (
-                      <label
+            {isAdmin ? (
+              /* Admin sees all catalog classes with delete option */
+              catalogClasses.length === 0 ? (
+                <p className="py-3 text-center text-xs text-stone-400">No classes yet.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-1">
+                    {(showAllClasses ? catalogClasses : catalogClasses.slice(0, CLASS_LIMIT)).map((cls) => (
+                      <AdminClassItem
                         key={cls.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-stone-50 transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={enrolled}
-                          onChange={() => toggleClass(cls.id)}
-                          className="h-3.5 w-3.5 accent-[#8C1515]"
-                        />
-                        <span className={`truncate text-xs font-medium ${enrolled ? "text-[#8C1515]" : "text-stone-700"}`}>
-                          {cls.name.split("–")[0].trim()}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
+                        cls={cls}
+                        onDelete={(id) => setCatalogClasses((prev) => prev.filter((c) => c.id !== id))}
+                      />
+                    ))}
+                  </ul>
+                  {catalogClasses.length > CLASS_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllClasses((v) => !v)}
+                      className="mt-2 w-full rounded-lg py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 hover:text-[#8C1515] transition-colors"
+                    >
+                      {showAllClasses ? "Show less" : `Show ${catalogClasses.length - CLASS_LIMIT} more`}
+                    </button>
+                  )}
+                </>
+              )
+            ) : (
+              /* Regular users see only their enrolled classes */
+              <>
+                {hubs.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-stone-400">No classes yet.</p>
+                ) : (
+                  <>
+                  <ul className="flex flex-col gap-1">
+                    {(showAllClasses ? hubs : hubs.slice(0, CLASS_LIMIT)).map((h) => (
+                      <li key={h.id}>
+                        <Link
+                          to={`/class/${encodeURIComponent(h.id)}`}
+                          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-[#8C1515] transition-colors"
+                        >
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[#8C1515]" />
+                          <span className="truncate">{h.name.split("–")[0].trim()}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  {hubs.length > CLASS_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllClasses((v) => !v)}
+                      className="mt-2 w-full rounded-lg py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 hover:text-[#8C1515] transition-colors"
+                    >
+                      {showAllClasses ? "Show less" : `Show ${hubs.length - CLASS_LIMIT} more`}
+                    </button>
+                  )}
+                  </>
+                )}
+                {showClassPicker && catalogClasses.length > 0 && (
+                  <div className="mt-3 border-t border-stone-100 pt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Catalog</p>
+                    <div className="flex flex-col gap-1.5">
+                      {catalogClasses.map((cls) => {
+                        const enrolled = selectedClassIds.includes(cls.id);
+                        return (
+                          <label
+                            key={cls.id}
+                            className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-stone-50 transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={enrolled}
+                              onChange={() => toggleClass(cls.id)}
+                              className="h-3.5 w-3.5 accent-[#8C1515]"
+                            />
+                            <span className={`truncate text-xs font-medium ${enrolled ? "text-[#8C1515]" : "text-stone-700"}`}>
+                              {cls.name.split("–")[0].trim()}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

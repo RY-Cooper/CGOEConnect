@@ -17,6 +17,71 @@ router.post('/', auth, requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/classes/:id — admin only, cascades chats/resources/reviews/enrollments
+router.delete('/:id', auth, requireAdmin, async (req, res, next) => {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const classId = req.params.id;
+
+    // cascade messages inside class chats
+    await client.query(`
+      DELETE FROM message_reactions WHERE message_id IN (
+        SELECT m.id FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM message_helpful WHERE message_id IN (
+        SELECT m.id FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM poll_votes WHERE poll_id IN (
+        SELECT p.id FROM polls p JOIN messages m ON m.id = p.message_id
+        JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM poll_options WHERE poll_id IN (
+        SELECT p.id FROM polls p JOIN messages m ON m.id = p.message_id
+        JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM polls WHERE message_id IN (
+        SELECT m.id FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM scheduler_attendees WHERE scheduler_id IN (
+        SELECT s.id FROM schedulers s JOIN messages m ON m.id = s.message_id
+        JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM schedulers WHERE message_id IN (
+        SELECT m.id FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM flags WHERE target_type = 'message' AND target_id IN (
+        SELECT m.id FROM messages m JOIN chats c ON c.id = m.chat_id WHERE c.class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM messages WHERE chat_id IN (SELECT id FROM chats WHERE class_id = $1)`, [classId]);
+    await client.query(`DELETE FROM chats WHERE class_id = $1`, [classId]);
+
+    // resources
+    await client.query(`DELETE FROM resources WHERE class_id = $1`, [classId]);
+
+    // reviews
+    await client.query(`
+      DELETE FROM review_helpful WHERE review_id IN (SELECT id FROM reviews WHERE class_id = $1)`, [classId]);
+    await client.query(`
+      DELETE FROM flags WHERE target_type = 'review' AND target_id IN (
+        SELECT id FROM reviews WHERE class_id = $1)`, [classId]);
+    await client.query(`DELETE FROM reviews WHERE class_id = $1`, [classId]);
+
+    // user enrollments
+    await client.query(`
+      UPDATE users SET classes = array_remove(classes, $1) WHERE $1 = ANY(classes)`, [classId]);
+
+    await client.query(`DELETE FROM classes WHERE id = $1`, [classId]);
+    await client.query('COMMIT');
+    res.status(204).send();
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // GET /api/classes?program=CGOE
 router.get('/', auth, async (req, res, next) => {
   try {

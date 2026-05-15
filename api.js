@@ -43,13 +43,14 @@ export const usersAPI = {
 
 // ── Classes ──────────────────────────────────────────────────────────────────
 export const classesAPI = {
-  create:       (data)             => req('POST', '/classes', data),
-  list:         (program)          => req('GET',  `/classes${program ? `?program=${encodeURIComponent(program)}` : ''}`),
-  get:          (id)               => req('GET',  `/classes/${id}`),
-  chats:        (classId)          => req('GET',  `/classes/${classId}/chats`),
-  createChat:   (classId, data)    => req('POST', `/classes/${classId}/chats`, data),
-  reviews:      (classId)          => req('GET',  `/classes/${classId}/reviews`),
-  createReview: (classId, data)    => req('POST', `/classes/${classId}/reviews`, data),
+  create:       (data)             => req('POST',   '/classes', data),
+  list:         (program)          => req('GET',    `/classes${program ? `?program=${encodeURIComponent(program)}` : ''}`),
+  get:          (id)               => req('GET',    `/classes/${id}`),
+  remove:       (id)               => req('DELETE', `/classes/${id}`),
+  chats:        (classId)          => req('GET',    `/classes/${classId}/chats`),
+  createChat:   (classId, data)    => req('POST',   `/classes/${classId}/chats`, data),
+  reviews:      (classId)          => req('GET',    `/classes/${classId}/reviews`),
+  createReview: (classId, data)    => req('POST',   `/classes/${classId}/reviews`, data),
 };
 
 // ── Chats ─────────────────────────────────────────────────────────────────────
