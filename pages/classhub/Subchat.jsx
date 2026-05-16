@@ -444,7 +444,7 @@ export default function Subchat() {
     <div className="min-h-screen bg-stone-50 flex flex-col">
       <TopNav />
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-6">
+        <div className="mx-auto max-w-5xl px-4 py-6">
           <Link to={base} className="text-sm font-medium text-[#8C1515] hover:underline">
             ← {hubClass.name}
           </Link>
@@ -495,7 +495,7 @@ export default function Subchat() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-6 flex flex-col gap-6">
+      <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-6 flex flex-col gap-6">
         {chat.is_private && !chat.is_member && chat.created_by !== currentUser?.id ? (
           <PrivateAccessGate chat={chat} currentUserId={currentUser?.id} />
         ) : (

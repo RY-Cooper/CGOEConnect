@@ -107,7 +107,7 @@ export default function Resources() {
   return (
     <div className="min-h-screen bg-stone-50">
       <TopNav />
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-10">
         <Link to={base} className="text-sm font-medium text-[#8C1515] hover:underline">
           ← Back to hub
         </Link>

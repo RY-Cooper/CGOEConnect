@@ -80,7 +80,7 @@ export default function Announcements() {
 
   return (
     <div className="min-h-screen bg-[#f6f1e7] px-4 py-10">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <Link to={base} className="text-sm font-medium text-[#8C1515] hover:underline">
           ← Back to hub
         </Link>

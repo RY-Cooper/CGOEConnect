@@ -331,7 +331,7 @@ export default function MySubchats() {
     <div className="min-h-screen bg-stone-50">
       <TopNav />
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="mx-auto max-w-5xl px-4 py-8">
           <Link to="/" className="text-sm font-medium text-[#8C1515] hover:underline">← Home</Link>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-2xl font-semibold text-stone-900">My Subchats</h1>
@@ -348,7 +348,7 @@ export default function MySubchats() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8">
         {/* Tabs */}
         <div className="mb-6 flex gap-1 rounded-xl bg-stone-100 p-1">
           <button

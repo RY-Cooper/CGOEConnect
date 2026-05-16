@@ -21,7 +21,7 @@ export default function GeneralChat() {
     <div className="min-h-screen bg-stone-50">
       <TopNav />
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-6">
+        <div className="mx-auto max-w-5xl px-4 py-6">
           <Link to="/" className="text-sm font-medium text-[#8C1515] hover:underline">
             ← Home
           </Link>
@@ -48,7 +48,7 @@ export default function GeneralChat() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="mx-auto max-w-5xl px-4 py-6">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />

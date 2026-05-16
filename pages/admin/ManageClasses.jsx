@@ -295,7 +295,7 @@ export default function ManageClasses() {
     <div className="min-h-screen bg-stone-50">
       <TopNav />
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="mx-auto max-w-5xl px-4 py-8">
           <Link to="/" className="text-sm font-medium text-[#8C1515] hover:underline">← Home</Link>
           <h1 className="mt-4 text-2xl font-semibold text-stone-900">Manage classes</h1>
           <p className="mt-1 text-sm text-stone-500">
@@ -304,7 +304,7 @@ export default function ManageClasses() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 space-y-8">
+      <main className="mx-auto max-w-5xl px-4 py-8 space-y-8">
 
         {/* Create new class */}
         <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">

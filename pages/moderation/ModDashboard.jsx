@@ -118,7 +118,7 @@ export default function ModDashboard() {
       )}
 
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="mx-auto max-w-5xl px-4 py-8">
           <Link to="/" className="text-sm font-medium text-[#8C1515] hover:underline">← Home</Link>
           <div className="mt-4 flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-100">
@@ -160,7 +160,7 @@ export default function ModDashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8">
 
         {/* ── Users tab ── */}
         {activeTab === "users" && isAdmin && (
