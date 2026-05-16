@@ -152,24 +152,27 @@ export default function Resources() {
             />
 
             {mode === "file" ? (
-              <div
-                onClick={() => fileRef.current?.click()}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-stone-200 px-4 py-5 text-sm text-stone-500 hover:border-[#8C1515]/40 hover:bg-stone-50 transition-colors"
-              >
-                <svg className="h-5 w-5 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-                </svg>
-                {pickedFile
-                  ? <span className="font-medium text-stone-700 truncate">{pickedFile.name}</span>
-                  : <span>Click to choose a file — PDF, image, doc, etc.</span>
-                }
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
-                />
-              </div>
+              <>
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-stone-200 px-4 py-5 text-sm text-stone-500 hover:border-[#8C1515]/40 hover:bg-stone-50 transition-colors"
+                >
+                  <svg className="h-5 w-5 shrink-0 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                  </svg>
+                  {pickedFile
+                    ? <span className="font-medium text-stone-700 truncate">{pickedFile.name}</span>
+                    : <span>Click to choose a file — PDF, image, doc, etc.</span>
+                  }
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <p className="text-xs text-stone-400">Maximum file size: 10 MB</p>
+              </>
             ) : (
               <input
                 type="url"

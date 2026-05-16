@@ -699,7 +699,7 @@ function Composer({ onSubmit, currentUser, simple = false }) {
           htmlFor="img-attach"
           className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors
             ${imgPreview ? "bg-[#8C1515]/10 text-[#8C1515]" : "text-stone-500 hover:bg-stone-100"}`}
-          title="Attach image"
+          title="Attach image (max 10 MB)"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -707,6 +707,7 @@ function Composer({ onSubmit, currentUser, simple = false }) {
             <path strokeLinecap="round" d="M21 15l-5-5L5 21"/>
           </svg>
           Image
+          <span className="text-stone-400 font-normal">· max 10 MB</span>
         </label>
 
         {!simple && (

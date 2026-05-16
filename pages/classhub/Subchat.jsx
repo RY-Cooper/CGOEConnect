@@ -195,7 +195,7 @@ function SubchatPostCard({ post, currentUser, initialOpen }) {
   );
 }
 
-function MemberPanel({ chatId }) {
+function MemberPanel({ chatId, isPrivate }) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState(null);
   const [requests, setRequests] = useState(null);
@@ -343,12 +343,20 @@ function MemberPanel({ chatId }) {
             )}
           </div>
 
-          {/* Current members */}
-          {members && members.length > 0 && (
+          {/* Current members / participants */}
+          {members !== null && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
-                Members ({members.length})
-              </p>
+              <div className="mb-2 flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                  {isPrivate ? `Members (${members.length})` : `Recent participants (${members.length})`}
+                </p>
+                {!isPrivate && (
+                  <span className="text-xs text-stone-400">· Remove blocks future posting</span>
+                )}
+              </div>
+              {members.length === 0 && (
+                <p className="text-xs text-stone-400">No one has posted here yet.</p>
+              )}
               <ul className="flex flex-col gap-2">
                 {members.map((m) => (
                   <li key={m.id} className="flex items-center gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
@@ -480,7 +488,7 @@ export default function Subchat() {
                 )}
               </div>
               {chat.created_by === currentUser?.id && (
-                <MemberPanel chatId={chatId} />
+                <MemberPanel chatId={chatId} isPrivate={chat.is_private} />
               )}
             </div>
           </div>

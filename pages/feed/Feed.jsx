@@ -403,7 +403,7 @@ export default function Feed() {
         </div>
       )}
 
-      <main className="mx-auto max-w-6xl px-4 py-8 lg:grid lg:grid-cols-[220px_1fr_272px] lg:gap-6">
+      <main className="mx-auto max-w-7xl px-4 py-8 lg:grid lg:grid-cols-[240px_1fr_300px] lg:gap-6">
 
         {/* ── Col 1: Active subchats ── */}
         <aside className="mb-6 lg:mb-0">

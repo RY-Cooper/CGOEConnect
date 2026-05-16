@@ -9,6 +9,18 @@ async function assertAccess(chatId, userId, res) {
       'SELECT is_private, created_by FROM chats WHERE id = $1', [chatId]
     );
     if (!chat) { res.status(404).json({ error: 'Chat not found' }); return false; }
+    // Creators can never be banned from their own chat
+    if (chat.created_by !== userId) {
+      try {
+        const { rows: [ban] } = await db.query(
+          'SELECT 1 FROM chat_bans WHERE chat_id = $1 AND user_id = $2', [chatId, userId]
+        );
+        if (ban) {
+          res.status(403).json({ error: 'You have been removed from this chat', code: 'BANNED' });
+          return false;
+        }
+      } catch { /* chat_bans table may not exist yet */ }
+    }
     if (!chat.is_private || chat.created_by === userId) return true;
     try {
       const { rows: [member] } = await db.query(
@@ -321,20 +333,50 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
 // GET /api/chats/:id/members — creator or admin only
 router.get('/:id/members', auth, async (req, res, next) => {
   try {
-    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    const { rows: [chat] } = await db.query('SELECT created_by, is_private FROM chats WHERE id = $1', [req.params.id]);
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
     if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only the creator can view members' });
     }
-    const { rows } = await db.query(
-      `SELECT u.id, u.name, u.profile_pic, u.program, cm.joined_at
-       FROM chat_members cm
-       JOIN users u ON u.id = cm.user_id
-       WHERE cm.chat_id = $1
-       ORDER BY cm.joined_at ASC`,
-      [req.params.id]
-    );
-    res.json({ members: rows });
+    let members;
+    if (chat.is_private) {
+      const { rows } = await db.query(
+        `SELECT u.id, u.name, u.profile_pic, u.program, cm.joined_at
+         FROM chat_members cm
+         JOIN users u ON u.id = cm.user_id
+         WHERE cm.chat_id = $1
+         ORDER BY cm.joined_at ASC`,
+        [req.params.id]
+      );
+      members = rows;
+    } else {
+      // Public chat: return recent unique message authors (excluding creator and banned users)
+      try {
+        const { rows } = await db.query(
+          `SELECT DISTINCT ON (u.id) u.id, u.name, u.profile_pic, u.program, m.created_at AS joined_at
+           FROM messages m
+           JOIN users u ON u.id = m.author_id
+           WHERE m.chat_id = $1
+             AND m.author_id != $2
+             AND NOT EXISTS (SELECT 1 FROM chat_bans cb WHERE cb.chat_id = $1 AND cb.user_id = u.id)
+           ORDER BY u.id, m.created_at DESC`,
+          [req.params.id, chat.created_by]
+        );
+        members = rows;
+      } catch {
+        // chat_bans table may not exist yet — return all message authors
+        const { rows } = await db.query(
+          `SELECT DISTINCT ON (u.id) u.id, u.name, u.profile_pic, u.program, m.created_at AS joined_at
+           FROM messages m
+           JOIN users u ON u.id = m.author_id
+           WHERE m.chat_id = $1 AND m.author_id != $2
+           ORDER BY u.id, m.created_at DESC`,
+          [req.params.id, chat.created_by]
+        );
+        members = rows;
+      }
+    }
+    res.json({ members });
   } catch (err) { next(err); }
 });
 
@@ -374,7 +416,15 @@ router.delete('/:id/members/:userId', auth, async (req, res, next) => {
     if (req.params.userId === chat.created_by) {
       return res.status(400).json({ error: 'Cannot remove the creator' });
     }
+    // Remove from formal members list (private chats)
     await db.query('DELETE FROM chat_members WHERE chat_id = $1 AND user_id = $2', [req.params.id, req.params.userId]);
+    // Ban from chat so they can't post again (works for both public and private)
+    try {
+      await db.query(
+        'INSERT INTO chat_bans (chat_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [req.params.id, req.params.userId]
+      );
+    } catch { /* chat_bans table may not exist yet */ }
     res.status(204).send();
   } catch (err) { next(err); }
 });

@@ -23,7 +23,7 @@ export default function TopNav() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-stone-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 font-semibold text-stone-900 hover:text-[#8C1515] transition-colors">
