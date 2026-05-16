@@ -262,6 +262,25 @@ export default function ModDashboard() {
                       </p>
                     </div>
 
+                    {flag.target_content && (
+                      <div className="mb-3 rounded-xl border border-stone-100 bg-stone-50 px-4 py-3">
+                        <p className="text-xs font-semibold text-stone-500 mb-1">Reported content:</p>
+                        <p className="text-sm text-stone-700 line-clamp-3">{flag.target_content}</p>
+                        {flag.target_chat_id && (
+                          <Link
+                            to={flag.target_class_id
+                              ? `/class/${encodeURIComponent(flag.target_class_id)}/subchat/${flag.target_chat_id}`
+                              : `/introductions`}
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#8C1515] hover:underline"
+                          >
+                            View in chat
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" d="M9 5l7 7-7 7"/>
+                            </svg>
+                          </Link>
+                        )}
+                      </div>
+                    )}
                     <div className="mb-4 rounded-xl border border-stone-100 bg-stone-50 px-4 py-3">
                       <p className="text-xs font-semibold text-stone-500 mb-1">
                         {flag.target_type.charAt(0).toUpperCase() + flag.target_type.slice(1)} ID:

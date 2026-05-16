@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { classesAPI, postsAPI } from "../../api";
+import { classesAPI, postsAPI, chatsAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 
 function AdminClassItem({ cls, onDelete }) {
@@ -280,6 +280,7 @@ export default function Feed() {
 
   const [feedPosts, setFeedPosts] = useState([]);
   const [catalogClasses, setCatalogClasses] = useState([]);
+  const [mySubchats, setMySubchats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upvotedIds, setUpvotedIds] = useState(new Set());
   const [savedIds, setSavedIds] = useState(new Set());
@@ -290,13 +291,27 @@ export default function Feed() {
   const [toast, setToast] = useState(null);
   const CLASS_LIMIT = 5;
 
+  function getVisitedKey(chatId) { return `cgoe-visited-${chatId}`; }
+  function markVisited(chatId) {
+    try { localStorage.setItem(getVisitedKey(chatId), new Date().toISOString()); } catch { /* quota */ }
+  }
+  function hasNewActivity(chat) {
+    if (!chat.last_message_at) return false;
+    try {
+      const visited = localStorage.getItem(getVisitedKey(chat.id));
+      if (!visited) return true;
+      return new Date(chat.last_message_at) > new Date(visited);
+    } catch { return false; }
+  }
+
   useEffect(() => {
-    Promise.all([postsAPI.feed(), classesAPI.list()])
-      .then(([{ posts }, { classes }]) => {
+    Promise.all([postsAPI.feed(), classesAPI.list(), chatsAPI.mine().catch(() => ({ chats: [] }))])
+      .then(([{ posts }, { classes }, { chats }]) => {
         setFeedPosts(posts);
         setUpvotedIds(new Set(posts.filter((p) => p.upvoted).map((p) => p.id)));
         setSavedIds(new Set(posts.filter((p) => p.saved).map((p) => p.id)));
         setCatalogClasses(classes);
+        setMySubchats(chats);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -388,9 +403,55 @@ export default function Feed() {
         </div>
       )}
 
-      <main className="mx-auto max-w-5xl px-4 py-8 lg:grid lg:grid-cols-[1fr_288px] lg:gap-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 lg:grid lg:grid-cols-[220px_1fr_272px] lg:gap-6">
 
-        {/* ── Left: Posts feed ── */}
+        {/* ── Col 1: Active subchats ── */}
+        <aside className="mb-6 lg:mb-0">
+          <div className="lg:sticky lg:top-6 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-stone-700">My subchats</h2>
+              <Link to="/subchats" className="text-xs font-medium text-[#8C1515] hover:underline">See all</Link>
+            </div>
+            {mySubchats.length === 0 ? (
+              <p className="py-2 text-center text-xs text-stone-400">No subchats yet — join or create one from a class hub.</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {mySubchats.slice(0, 10).map((chat) => {
+                  const isNew = hasNewActivity(chat);
+                  return (
+                    <li key={chat.id}>
+                      <Link
+                        to={`/class/${encodeURIComponent(chat.class_id)}/subchat/${chat.id}`}
+                        onClick={() => markVisited(chat.id)}
+                        className="group flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-stone-50"
+                      >
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${isNew ? "bg-emerald-500" : "bg-stone-300"}`} />
+                        <span className="min-w-0 flex-1 truncate font-medium text-stone-700 group-hover:text-[#8C1515]">
+                          {chat.title}
+                        </span>
+                        {chat.is_private && (
+                          <svg className="h-3 w-3 shrink-0 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                          </svg>
+                        )}
+                        {Boolean(chat.pending_requests) && (
+                          <span className="shrink-0 rounded-full bg-[#8C1515] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+                            {chat.pending_requests}
+                          </span>
+                        )}
+                      </Link>
+                      {chat.class_name && (
+                        <p className="ml-7 truncate text-xs text-stone-400">{chat.class_name}</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Col 2: Posts feed ── */}
         <div className="min-w-0">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-stone-900">Home feed</h1>
@@ -433,8 +494,8 @@ export default function Feed() {
           )}
         </div>
 
-        {/* ── Right: Sidebar ── */}
-        <aside className="mt-8 space-y-5 lg:mt-0">
+        {/* ── Col 3: Classes + Reviews ── */}
+        <aside className="mt-6 space-y-5 lg:mt-0">
 
           {/* Active classes widget */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">

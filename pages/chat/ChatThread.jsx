@@ -484,6 +484,11 @@ function Composer({ onSubmit, currentUser, simple = false }) {
   async function handleImg(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setImgError("File too large — maximum size is 10 MB.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setImgPreview(URL.createObjectURL(file));
     setImgUrl(null);
     setImgError(null);

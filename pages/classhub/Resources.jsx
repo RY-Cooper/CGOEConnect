@@ -78,6 +78,7 @@ export default function Resources() {
       let type = "Link";
       if (mode === "file") {
         if (!pickedFile) { flash("Pick a file first.", false); return; }
+        if (pickedFile.size > 10 * 1024 * 1024) { flash("File too large — maximum size is 10 MB.", false); return; }
         url  = await uploadFile(pickedFile);
         type = fileType(pickedFile.type);
       }

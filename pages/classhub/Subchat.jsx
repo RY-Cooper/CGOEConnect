@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
-import { classesAPI, chatsAPI, postsAPI } from "../../api";
+import { classesAPI, chatsAPI, postsAPI, usersAPI } from "../../api";
 import { useAuth } from "../../context/AuthContext";
 
 function PrivateAccessGate({ chat, currentUserId, onRequestSent }) {
@@ -195,6 +195,180 @@ function SubchatPostCard({ post, currentUser, initialOpen }) {
   );
 }
 
+function MemberPanel({ chatId }) {
+  const [open, setOpen] = useState(false);
+  const [members, setMembers] = useState(null);
+  const [requests, setRequests] = useState(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [adding, setAdding] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+
+  const load = useCallback(async () => {
+    try {
+      const [{ members: m }, { requests: r }] = await Promise.all([
+        chatsAPI.members(chatId),
+        chatsAPI.joinRequests(chatId),
+      ]);
+      setMembers(m);
+      setRequests(r);
+    } catch { setMembers([]); setRequests([]); }
+  }, [chatId]);
+
+  useEffect(() => { if (open) load(); }, [open, load]);
+
+  async function handleSearch(e) {
+    const q = e.target.value;
+    setSearchQ(q);
+    if (q.trim().length < 2) { setSearchResults([]); return; }
+    try {
+      const { users } = await usersAPI.search(q.trim());
+      setSearchResults(users ?? []);
+    } catch { setSearchResults([]); }
+  }
+
+  async function handleAdd(userId) {
+    setAdding(userId);
+    try {
+      await chatsAPI.addMember(chatId, userId);
+      showToast("Member added.");
+      setSearchQ(""); setSearchResults([]);
+      await load();
+    } catch (err) { showToast(err.message || "Failed to add member"); }
+    finally { setAdding(null); }
+  }
+
+  async function handleRemove(userId) {
+    try {
+      await chatsAPI.removeMember(chatId, userId);
+      setMembers((prev) => prev.filter((m) => m.id !== userId));
+      showToast("Member removed.");
+    } catch (err) { showToast(err.message || "Failed to remove member"); }
+  }
+
+  async function handleRespond(requestId, action) {
+    try {
+      await chatsAPI.respondRequest(chatId, requestId, action);
+      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+      if (action === "accept") { await load(); }
+      showToast(action === "accept" ? "Request approved." : "Request denied.");
+    } catch (err) { showToast(err.message || "Failed to respond"); }
+  }
+
+  const pendingCount = requests?.length ?? 0;
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50 transition-colors"
+      >
+        <svg className="h-4 w-4 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        Manage members
+        {pendingCount > 0 && (
+          <span className="rounded-full bg-[#8C1515] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+            {pendingCount}
+          </span>
+        )}
+        <svg className={`h-4 w-4 text-stone-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-stone-900 px-5 py-3 text-sm font-medium text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm space-y-5">
+
+          {/* Pending requests */}
+          {pendingCount > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                Join requests ({pendingCount})
+              </p>
+              <ul className="flex flex-col gap-2">
+                {requests.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
+                    <img src={r.user_pic || `https://i.pravatar.cc/150?u=${r.user_id}`} alt={r.user_name} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-stone-800 truncate">{r.user_name}</p>
+                      <p className="text-xs text-stone-400">{r.user_program}</p>
+                    </div>
+                    <button type="button" onClick={() => handleRespond(r.id, "accept")}
+                      className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
+                      Approve
+                    </button>
+                    <button type="button" onClick={() => handleRespond(r.id, "deny")}
+                      className="rounded-lg border border-stone-200 px-3 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100">
+                      Deny
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Add member search */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">Add member</p>
+            <input
+              type="search"
+              value={searchQ}
+              onChange={handleSearch}
+              placeholder="Search by name…"
+              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
+            />
+            {searchResults.length > 0 && (
+              <ul className="mt-2 flex flex-col gap-1">
+                {searchResults.slice(0, 5).map((u) => (
+                  <li key={u.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-stone-50">
+                    <img src={u.profile_pic || `https://i.pravatar.cc/150?u=${u.id}`} alt={u.name} className="h-6 w-6 rounded-full object-cover shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-sm text-stone-700">{u.name}</span>
+                    <button type="button" onClick={() => handleAdd(u.id)} disabled={adding === u.id}
+                      className="shrink-0 rounded-lg bg-[#8C1515] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#6f1010] disabled:opacity-50">
+                      {adding === u.id ? "…" : "Add"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Current members */}
+          {members && members.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                Members ({members.length})
+              </p>
+              <ul className="flex flex-col gap-2">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
+                    <img src={m.profile_pic || `https://i.pravatar.cc/150?u=${m.id}`} alt={m.name} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-700">{m.name}</span>
+                    <button type="button" onClick={() => handleRemove(m.id)}
+                      className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Subchat() {
   const { classId, chatId } = useParams();
   const { currentUser } = useAuth();
@@ -296,7 +470,18 @@ export default function Subchat() {
                   </span>
                 )}
                 {created && <span>{created}</span>}
+                {chat.is_private && (
+                  <span className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    Private
+                  </span>
+                )}
               </div>
+              {chat.created_by === currentUser?.id && (
+                <MemberPanel chatId={chatId} />
+              )}
             </div>
           </div>
         </div>

@@ -47,33 +47,37 @@ router.get('/general', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/chats/mine — subchats created by current user (must come before /:id)
+// GET /api/chats/mine — subchats the user created or is a member of (must come before /:id)
 router.get('/mine', auth, async (req, res, next) => {
   try {
     let rows;
     try {
       const result = await db.query(
-        `SELECT c.*,
+        `SELECT DISTINCT c.*,
            u.name AS created_by_name, u.profile_pic AS created_by_pic,
-           cl.name AS class_name
+           cl.name AS class_name,
+           (SELECT MAX(created_at) FROM messages WHERE chat_id = c.id) AS last_message_at
          FROM chats c
          LEFT JOIN users u ON u.id = c.created_by
          LEFT JOIN classes cl ON cl.id = c.class_id
-         WHERE c.created_by = $1 AND (c.is_channel = false OR c.is_channel IS NULL)
+         LEFT JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = $1
+         WHERE (c.created_by = $1 OR cm.user_id = $1)
+           AND (c.is_channel = false OR c.is_channel IS NULL)
+           AND c.class_id IS NOT NULL
          ORDER BY c.created_at DESC`,
         [req.user.id]
       );
       rows = result.rows;
     } catch {
-      // is_channel column may not exist yet — fall back to simpler query
       const result = await db.query(
         `SELECT c.*,
            u.name AS created_by_name, u.profile_pic AS created_by_pic,
-           cl.name AS class_name
+           cl.name AS class_name,
+           (SELECT MAX(created_at) FROM messages WHERE chat_id = c.id) AS last_message_at
          FROM chats c
          LEFT JOIN users u ON u.id = c.created_by
          LEFT JOIN classes cl ON cl.id = c.class_id
-         WHERE c.created_by = $1
+         WHERE c.created_by = $1 AND c.class_id IS NOT NULL
          ORDER BY c.created_at DESC`,
         [req.user.id]
       );
