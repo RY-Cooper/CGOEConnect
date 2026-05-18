@@ -71,6 +71,13 @@ export function AuthProvider({ children }) {
     setCurrentUser(normalizeUser(user));
   }, []);
 
+  // Set session directly from a token+user already returned by the server (no extra round-trip)
+  const loginWithToken = useCallback((token, rawUser) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(rawUser));
+    setCurrentUser(normalizeUser(rawUser));
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
@@ -102,26 +109,26 @@ export function AuthProvider({ children }) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   }, [currentUser]);
 
-  // Called after the register form — updates profile fields + enrolls classes
-  const saveRegistration = useCallback(async (payload) => {
-    if (!currentUser) return;
-    const { displayName, email, identityTags, studentStatus, modalityTags, selectedClassIds } = payload;
-    const { user } = await usersAPI.update(currentUser.id, {
+  // Called after the register form — userId passed explicitly to avoid stale closure
+  const saveRegistration = useCallback(async (userId, payload) => {
+    if (!userId) return;
+    const { displayName, bio, profilePic, identityTags, studentStatus, modalityTags, timezone, selectedClassIds } = payload;
+    await usersAPI.update(userId, {
       name:           displayName,
+      bio:            bio,
+      profile_pic:    profilePic,
       identity_tags:  identityTags,
       student_status: studentStatus,
       modality_tags:  modalityTags,
+      timezone:       timezone,
       agreed_to_guidelines: true,
     });
-    // Enroll in selected classes
-    const catalogIds = (selectedClassIds ?? []).filter((id) => !id.startsWith('custom-'));
-    await Promise.all(catalogIds.map((cid) => usersAPI.enroll(currentUser.id, cid).catch(() => {})));
-    // Refresh user from server to get updated classes list
+    await Promise.all((selectedClassIds ?? []).map((cid) => usersAPI.enroll(userId, cid).catch(() => {})));
     const { user: fresh } = await authAPI.me();
     const normalized = normalizeUser(fresh);
     setCurrentUser(normalized);
     localStorage.setItem(USER_KEY, JSON.stringify(fresh));
-  }, [currentUser]);
+  }, []);
 
   const deleteAccount = useCallback(async () => {
     if (!currentUser) return;
@@ -155,6 +162,7 @@ export function AuthProvider({ children }) {
     isAuthenticated:     Boolean(currentUser),
     currentUser,
     login,
+    loginWithToken,
     logout,
     deleteAccount,
     agreedToGuidelines:  Boolean(currentUser?.agreedToGuidelines),
@@ -164,7 +172,7 @@ export function AuthProvider({ children }) {
     selectedClassIds,
     setSelectedClassIds,
   }), [
-    ready, currentUser, login, logout, deleteAccount,
+    ready, currentUser, login, loginWithToken, logout, deleteAccount,
     setAgreedToGuidelines, updateProfile, saveRegistration,
     selectedClassIds, setSelectedClassIds,
   ]);

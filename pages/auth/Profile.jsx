@@ -3,25 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { classesAPI } from "../../api";
 import { uploadImage } from "../../utils/cloudinary";
-import { IDENTITY_TAGS, STUDENT_STATUSES, MODALITY_TAGS } from "./Register";
+import { IDENTITY_TAGS, STUDENT_STATUSES, MODALITY_TAGS, TIMEZONES } from "./Register";
 import TopNav from "../../components/TopNav";
-
-const TIMEZONES = [
-  { value: "America/Los_Angeles", label: "Pacific Time (PT) — Los Angeles" },
-  { value: "America/Denver",      label: "Mountain Time (MT) — Denver" },
-  { value: "America/Chicago",     label: "Central Time (CT) — Chicago" },
-  { value: "America/New_York",    label: "Eastern Time (ET) — New York" },
-  { value: "America/Sao_Paulo",   label: "Brasília Time (BRT) — São Paulo" },
-  { value: "Europe/London",       label: "GMT — London" },
-  { value: "Europe/Paris",        label: "Central European Time — Paris" },
-  { value: "Europe/Berlin",       label: "Central European Time — Berlin" },
-  { value: "Asia/Dubai",          label: "Gulf Standard Time — Dubai" },
-  { value: "Asia/Kolkata",        label: "India Standard Time — Mumbai" },
-  { value: "Asia/Singapore",      label: "Singapore Time — Singapore" },
-  { value: "Asia/Tokyo",          label: "Japan Standard Time — Tokyo" },
-  { value: "Australia/Sydney",    label: "Australian Eastern Time — Sydney" },
-  { value: "Pacific/Auckland",    label: "New Zealand Time — Auckland" },
-];
 
 export default function Profile() {
   const { currentUser, updateProfile, setSelectedClassIds, deleteAccount } = useAuth();

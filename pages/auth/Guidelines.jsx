@@ -36,7 +36,7 @@ export default function Guidelines() {
     setSaving(true);
     try {
       await setAgreedToGuidelines(true);
-      navigate("/profile-setup", { replace: true });
+      navigate("/", { replace: true });
     } catch (e) {
       setError(e?.message || "Could not save. Try again.");
     } finally {
