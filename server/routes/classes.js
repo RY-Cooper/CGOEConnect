@@ -82,8 +82,8 @@ router.delete('/:id', auth, requireAdmin, async (req, res, next) => {
   }
 });
 
-// GET /api/classes?program=CGOE
-router.get('/', auth, async (req, res, next) => {
+// GET /api/classes?program=CGOE — public so the registration form can load the catalog
+router.get('/', async (req, res, next) => {
   try {
     const { program } = req.query;
     const { rows } = program

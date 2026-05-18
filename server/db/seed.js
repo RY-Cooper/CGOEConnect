@@ -110,6 +110,7 @@ async function seed() {
       ['cs255',  'CS 255 — Introduction to Cryptography',                    ['CGOE','MS','Certificate']],
       ['cs261',  'CS 261 — Combinatorial Optimization',                      ['CGOE','MS']],
       ['cs265',  'CS 265 — Randomized Algorithms and Probabilistic Analysis', ['CGOE','MS']],
+      ['cs278',  'CS 278 — Social Computing',                                 ['CGOE','MS','HCP']],
       ['cs347',  'CS 347 — Human-Computer Interaction: Foundations and Frontiers', ['CGOE','HCP','MS']],
       ['cs520',  'CS 520 — Knowledge Graphs',                                ['CGOE','MS','NDO','Professional Ed']],
       ['ee364a', 'EE 364A — Convex Optimization',                            ['MS','Certificate','Professional Ed']],

@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { classesAPI } from "../../api";
 import { uploadImage } from "../../utils/cloudinary";
+import defaultProfilePic from "../../images/profile-pic-default.avif";
 
 export const IDENTITY_TAGS    = ["CGOE","HCP","NDO","Certificate","Professional Ed","MS"];
 export const STUDENT_STATUSES = ["prospective","admitted","current","alumni"];
@@ -79,6 +81,16 @@ export default function Register() {
   const [picPreview, setPicPreview] = useState("");
   const picRef = useRef(null);
 
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+
+  useEffect(() => {
+    classesAPI.list()
+      .then(({ classes }) => setCourses(classes.sort((a, b) => a.id.localeCompare(b.id))))
+      .catch(() => setCourses([]))
+      .finally(() => setCoursesLoading(false));
+  }, []);
+
   function handlePicPick(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -90,8 +102,8 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
 
   const filteredCourses = courseSearch.trim()
-    ? COURSES.filter((c) => c.name.toLowerCase().includes(courseSearch.toLowerCase()))
-    : COURSES;
+    ? courses.filter((c) => c.name.toLowerCase().includes(courseSearch.toLowerCase()))
+    : courses;
 
   function toggleIdentity(tag) {
     setIdentityTags((p) => p.includes(tag) ? p.filter((t) => t !== tag) : [...p, tag]);
@@ -115,9 +127,9 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!identityTags.length)      { setError("Select at least one program or pathway tag."); return; }
-    if (!studentStatus)            { setError("Select where you are in your journey."); return; }
-    if (!selectedCourseIds.length) { setError("Select at least one class."); return; }
+    if (!identityTags.length)                        { setError("Select at least one program or pathway tag."); return; }
+    if (!studentStatus)                              { setError("Select where you are in your journey."); return; }
+    if (courses.length > 0 && !selectedCourseIds.length) { setError("Select at least one class."); return; }
     setError(""); setLoading(true);
     try {
       const { authAPI } = await import("../../api");
@@ -190,7 +202,7 @@ export default function Register() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="relative shrink-0">
                 <img
-                  src={picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80"}
+                  src={picPreview || defaultProfilePic}
                   alt=""
                   className="h-20 w-20 rounded-full object-cover border border-stone-200"
                 />
@@ -287,23 +299,35 @@ export default function Register() {
             <fieldset>
               <legend className="text-sm font-medium text-stone-700 mb-2">Classes this quarter <span className="text-red-600">*</span></legend>
               <p className="text-xs text-stone-500 mb-3">Select all that apply.</p>
-              <input
-                value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)}
-                placeholder="Search courses…"
-                className="mb-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25" />
-              <div className="max-h-52 overflow-y-auto rounded-lg border border-stone-200 divide-y divide-stone-100">
-                {filteredCourses.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-stone-500 text-center">No courses match your search.</p>
-                ) : filteredCourses.map((c) => (
-                  <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-stone-50">
-                    <input type="checkbox" checked={selectedCourseIds.includes(c.id)} onChange={() => toggleCourse(c.id)}
-                      className="rounded border-stone-300 text-[#8C1515] focus:ring-[#8C1515]" />
-                    <span className="text-sm text-stone-900">{c.name}</span>
-                  </label>
-                ))}
-              </div>
-              {selectedCourseIds.length > 0 && (
-                <p className="mt-1.5 text-xs text-stone-500">{selectedCourseIds.length} selected</p>
+              {coursesLoading ? (
+                <div className="flex justify-center py-6">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
+                </div>
+              ) : courses.length === 0 ? (
+                <p className="rounded-lg border border-stone-200 px-3 py-4 text-sm text-stone-500 text-center">
+                  No classes available yet — check back soon.
+                </p>
+              ) : (
+                <>
+                  <input
+                    value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)}
+                    placeholder="Search courses…"
+                    className="mb-2 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25" />
+                  <div className="max-h-52 overflow-y-auto rounded-lg border border-stone-200 divide-y divide-stone-100">
+                    {filteredCourses.length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-stone-500 text-center">No courses match your search.</p>
+                    ) : filteredCourses.map((c) => (
+                      <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-stone-50">
+                        <input type="checkbox" checked={selectedCourseIds.includes(c.id)} onChange={() => toggleCourse(c.id)}
+                          className="rounded border-stone-300 text-[#8C1515] focus:ring-[#8C1515]" />
+                        <span className="text-sm text-stone-900">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedCourseIds.length > 0 && (
+                    <p className="mt-1.5 text-xs text-stone-500">{selectedCourseIds.length} selected</p>
+                  )}
+                </>
               )}
             </fieldset>
 
