@@ -154,3 +154,17 @@ CREATE TABLE IF NOT EXISTS flags (
   resolved BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+  type        TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   UUID NOT NULL,
+  meta        JSONB NOT NULL DEFAULT '{}',
+  read        BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC);
