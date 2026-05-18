@@ -140,7 +140,7 @@ router.get('/:classId/chats', auth, async (req, res, next) => {
 // POST /api/classes/:classId/chats
 // is_channel=true requires admin; subchats open to all authenticated users
 router.post('/:classId/chats', auth, async (req, res, next) => {
-  const { title, tags, is_channel, is_private } = req.body;
+  const { title, description, tags, is_channel, is_private } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   if (is_channel && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Only admins can create class channels' });
@@ -148,25 +148,14 @@ router.post('/:classId/chats', auth, async (req, res, next) => {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    // Try with is_private column; fall back if it doesn't exist yet
     let chat;
-    try {
-      const { rows: [c] } = await client.query(
-        `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel, is_private)
-         VALUES ($1,$2,$3,$4,$4,$5,$6)
-         RETURNING *`,
-        [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel), Boolean(is_private)]
-      );
-      chat = c;
-    } catch {
-      const { rows: [c] } = await client.query(
-        `INSERT INTO chats (class_id, title, tags, created_by, moderator_id, is_channel)
-         VALUES ($1,$2,$3,$4,$4,$5)
-         RETURNING *`,
-        [req.params.classId, title, tags || [], req.user.id, Boolean(is_channel)]
-      );
-      chat = c;
-    }
+    const { rows: [c] } = await client.query(
+      `INSERT INTO chats (class_id, title, description, tags, created_by, moderator_id, is_channel, is_private)
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7)
+       RETURNING *`,
+      [req.params.classId, title, description || '', tags || [], req.user.id, Boolean(is_channel), Boolean(is_private)]
+    );
+    chat = c;
     // Auto-add creator as member (skip if table doesn't exist)
     try {
       await client.query(

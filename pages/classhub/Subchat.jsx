@@ -468,6 +468,10 @@ export default function Subchat() {
                 )}
               </div>
 
+              {chat.description && (
+                <p className="mt-2 text-sm text-stone-600 max-w-2xl">{chat.description}</p>
+              )}
+
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-stone-500">
                 {chat.created_by_name && (
                   <span className="flex items-center gap-1.5">

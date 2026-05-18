@@ -78,7 +78,10 @@ function ChatItem({ ch, base, label, currentUserId }) {
 
       {open && (
         <div className="border-t border-stone-100 px-4 py-3 pl-12 bg-stone-50/80">
-          <p className="text-sm text-stone-600">
+          {ch.description && (
+            <p className="text-sm text-stone-700 mb-1">{ch.description}</p>
+          )}
+          <p className="text-sm text-stone-500">
             {created && <span>Started {created} · </span>}
             {canOpen
               ? "Open the thread to read and reply."
@@ -121,9 +124,10 @@ function ChatItem({ ch, base, label, currentUserId }) {
 }
 
 function NewChatModal({ classId, isChannel, onCreated, onClose }) {
-  const [title, setTitle]         = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [saving, setSaving]       = useState(false);
+  const [title, setTitle]             = useState("");
+  const [description, setDescription] = useState("");
+  const [isPrivate, setIsPrivate]     = useState(false);
+  const [saving, setSaving]           = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -132,6 +136,7 @@ function NewChatModal({ classId, isChannel, onCreated, onClose }) {
     try {
       const { chat } = await classesAPI.createChat(classId, {
         title: title.trim(),
+        description: description.trim(),
         is_channel: isChannel,
         is_private: !isChannel && isPrivate,
       });
@@ -159,6 +164,17 @@ function NewChatModal({ classId, isChannel, onCreated, onClose }) {
               placeholder={isChannel ? "e.g. Announcements" : "e.g. Week 3 HW help"}
               className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25"
               autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Description <span className="font-normal text-stone-400">(optional)</span></label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What is this chat about?"
+              rows={2}
+              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/25 resize-none"
             />
           </div>
 
