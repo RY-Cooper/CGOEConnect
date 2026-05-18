@@ -459,7 +459,7 @@ export default function Feed() {
         <div className="min-w-0">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-stone-900">Home feed</h1>
-            <p className="mt-1 text-sm text-stone-500">Latest posts from your community.</p>
+            <p className="mt-1 text-sm text-stone-500">Latest posts from the CGOE community.</p>
           </div>
 
           <PostComposer currentUser={currentUser} onPost={(post) => setFeedPosts((prev) => [post, ...prev])} />
