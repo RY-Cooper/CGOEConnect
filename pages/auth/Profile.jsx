@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { classesAPI } from "../../api";
 import { uploadImage } from "../../utils/cloudinary";
+import defaultProfilePic from "../../images/profile-pic-default.avif";
 import { IDENTITY_TAGS, STUDENT_STATUSES, MODALITY_TAGS, TIMEZONES } from "./Register";
 import TopNav from "../../components/TopNav";
 
@@ -26,7 +27,7 @@ export default function Profile() {
   const [deleting,      setDeleting]      = useState(false);
   const picRef = useRef(null);
 
-  const previewPic = picPreview || "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=256&q=80";
+  const previewPic = picPreview || defaultProfilePic;
 
   const catalogSorted = useMemo(
     () => [...catalogClasses].sort((a, b) => a.name.localeCompare(b.name)),
@@ -61,8 +62,10 @@ export default function Profile() {
     setSaving(true);
     setSaveError(null);
     try {
-      let picUrl = picPreview;
-      if (picFile) picUrl = await uploadImage(picFile);
+      let picUrl = picFile ? await uploadImage(picFile) : picPreview;
+      // Don't write the local default asset URL back to the DB — keep '' so
+      // normalizeUser always resolves it to the current-build asset hash.
+      if (picUrl === defaultProfilePic) picUrl = '';
       await updateProfile({
         displayName, bio, timezone,
         profilePic:   picUrl || undefined,

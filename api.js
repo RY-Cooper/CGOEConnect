@@ -1,4 +1,6 @@
 // Central API client — reads JWT from localStorage, prefixes all calls with /api
+import defaultProfilePic from './images/profile-pic-default.avif';
+
 const BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
 export function getToken() {
@@ -136,7 +138,7 @@ export function normalizeUser(u) {
     email:              u.email,
     name:               u.name,
     bio:                u.bio ?? '',
-    profilePic:         u.profile_pic ?? '',
+    profilePic:         u.profile_pic || defaultProfilePic,
     program:            u.program,
     role:               u.role,
     classes:            u.classes ?? [],

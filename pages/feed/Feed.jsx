@@ -286,7 +286,6 @@ export default function Feed() {
   const [savedIds, setSavedIds] = useState(new Set());
   const [reportedPostIds, setReportedPostIds] = useState(new Set());
   const [openCommentIds, setOpenCommentIds] = useState(new Set());
-  const [showClassPicker, setShowClassPicker] = useState(false);
   const [showAllClasses, setShowAllClasses] = useState(false);
   const [toast, setToast] = useState(null);
   const CLASS_LIMIT = 5;
@@ -328,6 +327,11 @@ export default function Feed() {
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [selectedClassIds, catalogClasses]);
+
+  const unenrolledClasses = useMemo(
+    () => catalogClasses.filter((c) => !selectedClassIds.includes(c.id)),
+    [catalogClasses, selectedClassIds]
+  );
 
   function showToast(msg) {
     setToast(msg);
@@ -497,22 +501,14 @@ export default function Feed() {
         {/* ── Col 3: Classes + Reviews ── */}
         <aside className="mt-6 space-y-5 lg:mt-0">
 
-          {/* Active classes widget */}
+          {/* Course roster widget */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-stone-700">Active classes</h2>
-              {isAdmin ? (
+              <h2 className="text-sm font-semibold text-stone-700">Courses</h2>
+              {isAdmin && (
                 <Link to="/admin/classes" className="text-xs font-medium text-[#8C1515] hover:underline">
                   Manage
                 </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowClassPicker((p) => !p)}
-                  className="text-xs font-medium text-[#8C1515] hover:underline"
-                >
-                  {showClassPicker ? "Done" : "Manage"}
-                </button>
               )}
             </div>
 
@@ -543,61 +539,78 @@ export default function Feed() {
                 </>
               )
             ) : (
-              /* Regular users see only their enrolled classes */
+              /* Regular users: enrolled courses + full catalog to add from */
               <>
-                {hubs.length === 0 ? (
-                  <p className="py-3 text-center text-xs text-stone-400">No classes yet.</p>
-                ) : (
+                {/* Enrolled courses */}
+                {hubs.length > 0 && (
                   <>
-                  <ul className="flex flex-col gap-1">
-                    {(showAllClasses ? hubs : hubs.slice(0, CLASS_LIMIT)).map((h) => (
-                      <li key={h.id}>
-                        <Link
-                          to={`/class/${encodeURIComponent(h.id)}`}
-                          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-[#8C1515] transition-colors"
-                        >
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-[#8C1515]" />
-                          <span className="truncate">{h.name.split("–")[0].trim()}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                  {hubs.length > CLASS_LIMIT && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllClasses((v) => !v)}
-                      className="mt-2 w-full rounded-lg py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 hover:text-[#8C1515] transition-colors"
-                    >
-                      {showAllClasses ? "Show less" : `Show ${hubs.length - CLASS_LIMIT} more`}
-                    </button>
-                  )}
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400">Enrolled</p>
+                    <ul className="flex flex-col gap-0.5 mb-1">
+                      {hubs.map((h) => (
+                        <li key={h.id} className="group flex items-center gap-1 rounded-lg pr-1 transition-colors hover:bg-stone-50">
+                          <Link
+                            to={`/class/${encodeURIComponent(h.id)}`}
+                            className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-sm font-medium text-stone-800 hover:text-[#8C1515]"
+                          >
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-[#8C1515]" />
+                            <span className="truncate">{h.name.split("–")[0].trim()}</span>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => toggleClass(h.id)}
+                            title="Remove from my courses"
+                            className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-stone-300 transition-all hover:bg-red-50 hover:text-red-400 group-hover:text-stone-400"
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" d="M20 12H4"/>
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </>
                 )}
-                {showClassPicker && catalogClasses.length > 0 && (
-                  <div className="mt-3 border-t border-stone-100 pt-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Catalog</p>
-                    <div className="flex flex-col gap-1.5">
-                      {catalogClasses.map((cls) => {
-                        const enrolled = selectedClassIds.includes(cls.id);
-                        return (
-                          <label
-                            key={cls.id}
-                            className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-stone-50 transition-colors"
+
+                {/* Available / unenrolled courses */}
+                {unenrolledClasses.length > 0 && (
+                  <div className={hubs.length > 0 ? "mt-3 border-t border-stone-100 pt-3" : ""}>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                      {hubs.length > 0 ? "Add a course" : "All courses"}
+                    </p>
+                    <ul className="flex flex-col gap-0.5">
+                      {(showAllClasses ? unenrolledClasses : unenrolledClasses.slice(0, 4)).map((cls) => (
+                        <li key={cls.id} className="group flex items-center gap-1 rounded-lg pr-1 transition-colors hover:bg-stone-50">
+                          <span className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-sm text-stone-500">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-stone-200" />
+                            <span className="truncate">{cls.name.split("–")[0].trim()}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => toggleClass(cls.id)}
+                            title="Add to my courses"
+                            className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-stone-300 transition-all hover:bg-emerald-50 hover:text-emerald-500 group-hover:text-stone-400"
                           >
-                            <input
-                              type="checkbox"
-                              checked={enrolled}
-                              onChange={() => toggleClass(cls.id)}
-                              className="h-3.5 w-3.5 accent-[#8C1515]"
-                            />
-                            <span className={`truncate text-xs font-medium ${enrolled ? "text-[#8C1515]" : "text-stone-700"}`}>
-                              {cls.name.split("–")[0].trim()}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                              <path strokeLinecap="round" d="M12 4v16m8-8H4"/>
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {unenrolledClasses.length > 4 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllClasses((v) => !v)}
+                        className="mt-1.5 w-full rounded-lg py-1.5 text-xs font-medium text-stone-400 hover:bg-stone-50 hover:text-[#8C1515] transition-colors"
+                      >
+                        {showAllClasses ? "Show less" : `+${unenrolledClasses.length - 4} more`}
+                      </button>
+                    )}
                   </div>
+                )}
+
+                {hubs.length === 0 && unenrolledClasses.length === 0 && (
+                  <p className="py-3 text-center text-xs text-stone-400">No courses available yet.</p>
                 )}
               </>
             )}
