@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { chatsAPI, usersAPI } from "../../api";
 import TopNav from "../../components/TopNav";
@@ -109,6 +109,8 @@ function AddMemberPanel({ chatId, existingIds, onAdded }) {
 // ── SubchatManageCard ────────────────────────────────────────────────────────
 
 function SubchatManageCard({ chat, onDeleted }) {
+  const navigate = useNavigate();
+  const chatTo = chat.class_id ? `/class/${chat.class_id}/subchat/${chat.id}` : `/subchat/${chat.id}`;
   const [expanded, setExpanded] = useState(false);
   const [members, setMembers] = useState(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -140,12 +142,15 @@ function SubchatManageCard({ chat, onDeleted }) {
   const memberIds = new Set((members ?? []).map((m) => m.id));
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+    <article
+      className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden cursor-pointer hover:border-stone-300 transition-colors"
+      onClick={() => navigate(chatTo)}
+    >
       <div className="p-5">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold text-stone-900">{chat.title}</h3>
+              <span className="font-semibold text-stone-900">{chat.title}</span>
               {chat.is_private ? (
                 <span className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600">
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -169,15 +174,9 @@ function SubchatManageCard({ chat, onDeleted }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Link
-              to={chat.class_id ? `/class/${chat.class_id}/subchat/${chat.id}` : `/subchat/${chat.id}`}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 transition-colors"
-            >
-              Open
-            </Link>
             <button
               type="button"
-              onClick={handleToggle}
+              onClick={(e) => { e.stopPropagation(); handleToggle(); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 expanded ? "bg-stone-100 text-stone-900" : "text-stone-600 hover:bg-stone-100"
               }`}
@@ -186,7 +185,7 @@ function SubchatManageCard({ chat, onDeleted }) {
             </button>
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
               disabled={deleting}
               className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50 transition-colors"
             >
@@ -197,7 +196,7 @@ function SubchatManageCard({ chat, onDeleted }) {
       </div>
 
       {expanded && (
-        <div className="border-t border-stone-100 bg-stone-50/60 px-5 py-4">
+        <div className="border-t border-stone-100 bg-stone-50/60 px-5 py-4" onClick={(e) => e.stopPropagation()}>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">Members</p>
           {loadingMembers ? (
             <div className="flex justify-center py-4">
