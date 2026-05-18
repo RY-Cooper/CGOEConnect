@@ -49,6 +49,13 @@ export const usersAPI = {
   search:         (q)  => req('GET',  `/users/search?q=${encodeURIComponent(q)}`),
 };
 
+// ── Feedback ─────────────────────────────────────────────────────────────────
+export const feedbackAPI = {
+  submit:       (category, message) => req('POST',  '/feedback', { category, message }),
+  list:         ()                  => req('GET',   '/feedback'),
+  updateStatus: (id, status)        => req('PATCH', `/feedback/${id}/status`, { status }),
+};
+
 // ── Classes ──────────────────────────────────────────────────────────────────
 export const classesAPI = {
   create:       (data)             => req('POST',   '/classes', data),

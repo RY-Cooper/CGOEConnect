@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { flagsAPI, usersAPI, messagesAPI, postsAPI, commentsAPI, reviewsAPI } from "../../api";
+import { flagsAPI, usersAPI, messagesAPI, postsAPI, commentsAPI, reviewsAPI, feedbackAPI } from "../../api";
 import TopNav from "../../components/TopNav";
 
 function timeAgo(dateStr) {
@@ -34,11 +34,16 @@ export default function ModDashboard() {
   const [activeTab, setActiveTab] = useState("pending");
 
   const isAdmin = currentUser?.role === "admin";
+  const isModOrAdmin = isAdmin || currentUser?.role === "moderator";
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [roleUpdating, setRoleUpdating] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+
+  const [feedbackItems, setFeedbackItems] = useState([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(null);
 
   useEffect(() => {
     flagsAPI.list()
@@ -56,6 +61,28 @@ export default function ModDashboard() {
         .finally(() => setUsersLoading(false));
     }
   }, [activeTab, isAdmin]);
+
+  useEffect(() => {
+    if (activeTab === "feedback" && isModOrAdmin && feedbackItems.length === 0) {
+      setFeedbackLoading(true);
+      feedbackAPI.list()
+        .then(({ feedback }) => setFeedbackItems(feedback))
+        .catch(() => {})
+        .finally(() => setFeedbackLoading(false));
+    }
+  }, [activeTab, isModOrAdmin]);
+
+  async function handleFeedbackStatus(id, status) {
+    setStatusUpdating(id);
+    try {
+      await feedbackAPI.updateStatus(id, status);
+      setFeedbackItems((prev) => prev.map((f) => f.id === id ? { ...f, status } : f));
+    } catch (err) {
+      showToast(err.message || "Failed to update status");
+    } finally {
+      setStatusUpdating(null);
+    }
+  }
 
   function showToast(msg) {
     setToast(msg);
@@ -222,6 +249,12 @@ export default function ModDashboard() {
                 Manage Users
               </button>
             )}
+            {isModOrAdmin && (
+              <button type="button" onClick={() => setActiveTab("feedback")}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${activeTab === "feedback" ? "bg-[#8C1515] text-white" : "text-stone-600 hover:bg-stone-100"}`}>
+                Feedback
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -310,6 +343,83 @@ export default function ModDashboard() {
             )}
           </div>
         )}
+
+        {/* ── Feedback tab ── */}
+        {activeTab === "feedback" && isModOrAdmin && (() => {
+          const STATUS_META = {
+            open:        { label: "Open",        classes: "bg-stone-100 text-stone-600" },
+            in_progress: { label: "In progress", classes: "bg-sky-100 text-sky-700" },
+            resolved:    { label: "Resolved",    classes: "bg-emerald-100 text-emerald-700" },
+            rejected:    { label: "Rejected",    classes: "bg-red-100 text-red-700" },
+          };
+          return (
+            <div>
+              <p className="mb-4 text-sm text-stone-500">
+                User-submitted feedback and feature requests.
+              </p>
+              {feedbackLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
+                </div>
+              ) : feedbackItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center">
+                  <p className="text-sm font-medium text-stone-500">No feedback submitted yet.</p>
+                </div>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {feedbackItems.map((item) => {
+                    const busy = statusUpdating === item.id;
+                    const currentStatus = item.status ?? "open";
+                    return (
+                      <li key={item.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <img
+                              src={item.author_pic || `https://i.pravatar.cc/150?u=${item.user_id}`}
+                              alt={item.author_name}
+                              className="h-7 w-7 rounded-full object-cover shrink-0"
+                            />
+                            <span className="text-sm font-semibold text-stone-800">{item.author_name ?? "Unknown"}</span>
+                            <span className="text-xs text-stone-400">{item.author_email}</span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              item.category === "bug"     ? "bg-red-100 text-red-700" :
+                              item.category === "feature" ? "bg-violet-100 text-violet-700" :
+                                                            "bg-stone-100 text-stone-600"
+                            }`}>
+                              {item.category === "bug" ? "Bug" : item.category === "feature" ? "Feature request" : "General"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-stone-400">{timeAgo(item.created_at)}</p>
+                        </div>
+
+                        <p className="mb-4 text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{item.message}</p>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="mr-1 text-xs font-medium text-stone-400">Status:</span>
+                          {Object.entries(STATUS_META).map(([value, { label, classes }]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => currentStatus !== value && handleFeedbackStatus(item.id, value)}
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                                currentStatus === value
+                                  ? classes
+                                  : "bg-stone-50 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Flags tabs ── */}
         {(activeTab === "pending" || activeTab === "resolved") && loading ? (

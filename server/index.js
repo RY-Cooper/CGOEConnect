@@ -21,6 +21,7 @@ app.use('/api/comments', require('./routes/comments'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/flags', require('./routes/flags'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/feedback',      require('./routes/feedback'));
 
 app.use((err, req, res, _next) => {
   console.error(err);
