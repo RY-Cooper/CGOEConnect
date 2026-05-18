@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { notify } = require('../notify');
 
 // POST /api/messages/:id/reactions  { emoji }
 router.post('/:id/reactions', auth, async (req, res, next) => {
@@ -41,6 +42,12 @@ router.post('/:id/helpful', auth, async (req, res, next) => {
     } else {
       await db.query('INSERT INTO message_helpful (message_id, user_id) VALUES ($1,$2)',
         [req.params.id, req.user.id]);
+      const { rows: [msg] } = await db.query(
+        `SELECT m.author_id, c.id AS chat_id, c.class_id
+         FROM messages m JOIN chats c ON c.id = m.chat_id WHERE m.id = $1`, [req.params.id]
+      );
+      if (msg) notify(msg.author_id, req.user.id, 'message_helpful', 'message', req.params.id,
+        { chat_id: msg.chat_id, class_id: msg.class_id });
     }
     const { rows: [{ count }] } = await db.query(
       'SELECT count(*) FROM message_helpful WHERE message_id = $1', [req.params.id]

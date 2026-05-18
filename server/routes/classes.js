@@ -219,8 +219,8 @@ router.get('/:classId/reviews', auth, async (req, res, next) => {
   try {
     const { rows } = await db.query(
       `SELECT r.*,
-         u.name        AS author_name,
-         u.profile_pic AS author_pic,
+         CASE WHEN r.anonymous THEN NULL ELSE u.name        END AS author_name,
+         CASE WHEN r.anonymous THEN NULL ELSE u.profile_pic END AS author_pic,
          (SELECT count(*) FROM review_helpful WHERE review_id = r.id)        AS helpful_votes,
          EXISTS(SELECT 1 FROM review_helpful WHERE review_id = r.id AND user_id = $2) AS marked_helpful
        FROM reviews r
@@ -235,16 +235,28 @@ router.get('/:classId/reviews', auth, async (req, res, next) => {
 
 // POST /api/classes/:classId/reviews
 router.post('/:classId/reviews', auth, async (req, res, next) => {
-  const { rating, content, cgoe_specific } = req.body;
+  const { rating, content, cgoe_specific, anonymous } = req.body;
   if (!rating || !content) return res.status(400).json({ error: 'rating and content are required' });
   try {
-    const { rows } = await db.query(
-      `INSERT INTO reviews (class_id, author_id, rating, content, cgoe_specific)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING *`,
-      [req.params.classId, req.user.id, rating, content, cgoe_specific || false]
-    );
-    res.status(201).json({ review: { ...rows[0], helpful_votes: 0, marked_helpful: false } });
+    const [{ rows }, { rows: [u] }] = await Promise.all([
+      db.query(
+        `INSERT INTO reviews (class_id, author_id, rating, content, cgoe_specific, anonymous)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING *`,
+        [req.params.classId, req.user.id, rating, content, cgoe_specific || false, anonymous || false]
+      ),
+      db.query('SELECT name, profile_pic FROM users WHERE id = $1', [req.user.id]),
+    ]);
+    const review = rows[0];
+    res.status(201).json({
+      review: {
+        ...review,
+        author_name:   review.anonymous ? null : u.name,
+        author_pic:    review.anonymous ? null : u.profile_pic,
+        helpful_votes: 0,
+        marked_helpful: false,
+      },
+    });
   } catch (err) { next(err); }
 });
 

@@ -284,17 +284,22 @@ export default function MySubchats() {
   const { currentUser } = useAuth();
   const [tab, setTab] = useState("subchats");
   const [chats, setChats] = useState([]);
-  const [requests, setRequests] = useState([]); // { chatId, chatTitle, requests[] }
+  const [incomingRequests, setIncomingRequests] = useState([]);
+  const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { chats: myChats } = await chatsAPI.mine();
+      const [{ chats: myChats }, { requests: myOutgoing }] = await Promise.all([
+        chatsAPI.mine(),
+        chatsAPI.myJoinRequests().catch(() => ({ requests: [] })),
+      ]);
       setChats(myChats);
+      setOutgoingRequests(myOutgoing);
 
-      const privateChats = myChats.filter((c) => c.is_private && Number(c.pending_requests) > 0);
-      const allRequests = await Promise.all(
+      const privateChats = myChats.filter((c) => c.created_by === currentUser?.id && c.is_private && Number(c.pending_requests) > 0);
+      const allIncoming = await Promise.all(
         privateChats.map(async (c) => {
           try {
             const { requests: reqs } = await chatsAPI.joinRequests(c.id);
@@ -302,18 +307,18 @@ export default function MySubchats() {
           } catch { return []; }
         })
       );
-      setRequests(allRequests.flat());
+      setIncomingRequests(allIncoming.flat());
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function handleResolved(requestId, action) {
-    setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    setIncomingRequests((prev) => prev.filter((r) => r.id !== requestId));
     if (action === "accept") {
       setChats((prev) =>
         prev.map((c) => {
-          const req = requests.find((r) => r.id === requestId);
+          const req = incomingRequests.find((r) => r.id === requestId);
           if (!req || c.id !== req.chatId) return c;
           return {
             ...c,
@@ -325,7 +330,7 @@ export default function MySubchats() {
     }
   }
 
-  const totalPending = requests.length;
+  const totalPending = incomingRequests.length + outgoingRequests.length;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -402,7 +407,7 @@ export default function MySubchats() {
               ))}
             </div>
           )
-        ) : requests.length === 0 ? (
+        ) : incomingRequests.length === 0 && outgoingRequests.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center">
             <svg className="mx-auto mb-3 h-10 w-10 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -411,17 +416,52 @@ export default function MySubchats() {
             <p className="mt-1 text-xs text-stone-400">Requests to join your private subchats will appear here.</p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {requests.map((req) => (
-              <JoinRequestCard
-                key={req.id}
-                request={req}
-                chatId={req.chatId}
-                chatTitle={req.chatTitle}
-                onResolved={handleResolved}
-              />
-            ))}
-          </ul>
+          <div className="flex flex-col gap-8">
+            {incomingRequests.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Incoming — requests to join your subchats
+                </h2>
+                <ul className="flex flex-col gap-3">
+                  {incomingRequests.map((req) => (
+                    <JoinRequestCard
+                      key={req.id}
+                      request={req}
+                      chatId={req.chatId}
+                      chatTitle={req.chatTitle}
+                      onResolved={handleResolved}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
+            {outgoingRequests.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Your pending requests
+                </h2>
+                <ul className="flex flex-col gap-3">
+                  {outgoingRequests.map((req) => (
+                    <li key={req.id} className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-stone-900">{req.chat_title}</p>
+                        <p className="text-xs text-stone-400">
+                          {req.class_name && <span>{req.class_name} · </span>}
+                          Requested {timeAgo(req.created_at)}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 border border-amber-200">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Pending
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
       </main>
     </div>

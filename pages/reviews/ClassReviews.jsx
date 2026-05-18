@@ -46,6 +46,7 @@ export default function ClassReviews() {
   const [formRating, setFormRating] = useState(0);
   const [formContent, setFormContent] = useState("");
   const [formCgoe, setFormCgoe] = useState(false);
+  const [formAnonymous, setFormAnonymous] = useState(false);
   const [flaggedIds, setFlaggedIds] = useState(new Set());
   const [helpfulMap, setHelpfulMap] = useState({});
   const [toast, setToast] = useState(null);
@@ -89,12 +90,14 @@ export default function ClassReviews() {
         rating: formRating,
         content: formContent.trim(),
         cgoe_specific: formCgoe,
+        anonymous: formAnonymous,
       });
       setReviews((prev) => [review, ...prev]);
       setHelpfulMap((prev) => ({ ...prev, [review.id]: { count: 0, marked: false } }));
       setFormRating(0);
       setFormContent("");
       setFormCgoe(false);
+      setFormAnonymous(false);
       setShowForm(false);
       showToast("Review submitted!");
     } catch (err) {
@@ -213,7 +216,7 @@ export default function ClassReviews() {
               />
             </div>
 
-            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-stone-700">
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-stone-700">
               <input
                 type="checkbox"
                 checked={formCgoe}
@@ -221,6 +224,26 @@ export default function ClassReviews() {
                 className="h-4 w-4 accent-[#8C1515]"
               />
               This review includes a CGOE-specific perspective
+            </label>
+
+            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                checked={formAnonymous}
+                onChange={(e) => setFormAnonymous(e.target.checked)}
+                className="h-4 w-4 accent-[#8C1515]"
+              />
+              Post anonymously
+              {!formAnonymous && currentUser && (
+                <span className="flex items-center gap-1.5 ml-1">
+                  <img
+                    src={currentUser.profilePic}
+                    alt={currentUser.displayName}
+                    className="h-5 w-5 rounded-full object-cover"
+                  />
+                  <span className="text-stone-400 text-xs">Visible as {currentUser.displayName}</span>
+                </span>
+              )}
             </label>
 
             <div className="flex gap-2">
@@ -271,11 +294,19 @@ export default function ClassReviews() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={review.author_pic || `https://i.pravatar.cc/150?u=${review.author_id}`}
-                        alt={review.author_name}
-                        className="h-9 w-9 rounded-full object-cover"
-                      />
+                      {review.anonymous ? (
+                        <div className="h-9 w-9 rounded-full bg-stone-200 flex items-center justify-center shrink-0">
+                          <svg className="h-5 w-5 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+                          </svg>
+                        </div>
+                      ) : (
+                        <img
+                          src={review.author_pic || `https://i.pravatar.cc/150?u=${review.author_id}`}
+                          alt={review.author_name}
+                          className="h-9 w-9 rounded-full object-cover"
+                        />
+                      )}
                       <div>
                         <p className="text-sm font-semibold text-stone-900">{review.author_name ?? "Anonymous"}</p>
                         <p className="text-xs text-stone-400">

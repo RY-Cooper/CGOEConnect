@@ -66,9 +66,10 @@ export const chatsAPI = {
   members:        (id)                 => req('GET',    `/chats/${id}/members`),
   addMember:      (id, userId)         => req('POST',   `/chats/${id}/members`, { userId }),
   removeMember:   (id, userId)         => req('DELETE', `/chats/${id}/members/${userId}`),
-  joinRequest:    (id)                 => req('POST',   `/chats/${id}/join-request`),
-  joinRequests:   (id)                 => req('GET',    `/chats/${id}/join-requests`),
-  respondRequest: (id, requestId, action) => req('PATCH', `/chats/${id}/join-requests/${requestId}`, { action }),
+  joinRequest:      (id)                    => req('POST',  `/chats/${id}/join-request`),
+  joinRequests:     (id)                    => req('GET',   `/chats/${id}/join-requests`),
+  myJoinRequests:   ()                      => req('GET',   '/chats/my-join-requests'),
+  respondRequest:   (id, requestId, action) => req('PATCH', `/chats/${id}/join-requests/${requestId}`, { action }),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -113,6 +114,13 @@ export const resourcesAPI = {
   list:   (classId)       => req('GET',    `/classes/${classId}/resources`),
   create: (classId, data) => req('POST',   `/classes/${classId}/resources`, data),
   remove: (classId, id)   => req('DELETE', `/classes/${classId}/resources/${id}`),
+};
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+export const notificationsAPI = {
+  list:    ()   => req('GET',   '/notifications'),
+  readAll: ()   => req('PATCH', '/notifications/read-all'),
+  read:    (id) => req('PATCH', `/notifications/${id}/read`),
 };
 
 // ── Flags ─────────────────────────────────────────────────────────────────────

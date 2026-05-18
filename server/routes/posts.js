@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { notify } = require('../notify');
 
 function postQuery(extraWhere, params, currentUserId) {
   return db.query(
@@ -78,6 +79,12 @@ router.post('/:id/upvote', auth, async (req, res, next) => {
     } else {
       await db.query('INSERT INTO post_upvotes (post_id, user_id) VALUES ($1,$2)',
         [req.params.id, req.user.id]);
+      // Notify post author
+      const { rows: [post] } = await db.query(
+        'SELECT author_id, class_id, chat_id FROM posts WHERE id = $1', [req.params.id]
+      );
+      if (post) notify(post.author_id, req.user.id, 'post_upvote', 'post', req.params.id,
+        { class_id: post.class_id, chat_id: post.chat_id });
     }
     const { rows: [{ count }] } = await db.query(
       'SELECT count(*) FROM post_upvotes WHERE post_id = $1', [req.params.id]
@@ -146,11 +153,14 @@ router.post('/:id/comments', auth, async (req, res, next) => {
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: 'content is required' });
   try {
-    const { rows: [comment] } = await db.query(
-      'INSERT INTO comments (post_id, author_id, content) VALUES ($1,$2,$3) RETURNING *',
-      [req.params.id, req.user.id, content]
-    );
-    const { rows: [author] } = await db.query('SELECT name, profile_pic FROM users WHERE id = $1', [req.user.id]);
+    const [{ rows: [comment] }, { rows: [author] }, { rows: [post] }] = await Promise.all([
+      db.query('INSERT INTO comments (post_id, author_id, content) VALUES ($1,$2,$3) RETURNING *',
+        [req.params.id, req.user.id, content]),
+      db.query('SELECT name, profile_pic FROM users WHERE id = $1', [req.user.id]),
+      db.query('SELECT author_id, class_id, chat_id FROM posts WHERE id = $1', [req.params.id]),
+    ]);
+    if (post) notify(post.author_id, req.user.id, 'comment', 'post', req.params.id,
+      { class_id: post.class_id, chat_id: post.chat_id });
     res.status(201).json({ comment: { ...comment, author_name: author.name, author_pic: author.profile_pic } });
   } catch (err) { next(err); }
 });

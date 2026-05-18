@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { notify } = require('../notify');
 
 // POST /api/reviews/:id/helpful  — toggle
 router.post('/:id/helpful', auth, async (req, res, next) => {
@@ -15,6 +16,11 @@ router.post('/:id/helpful', auth, async (req, res, next) => {
     } else {
       await db.query('INSERT INTO review_helpful (review_id, user_id) VALUES ($1,$2)',
         [req.params.id, req.user.id]);
+      const { rows: [review] } = await db.query(
+        'SELECT author_id, class_id FROM reviews WHERE id = $1', [req.params.id]
+      );
+      if (review) notify(review.author_id, req.user.id, 'review_helpful', 'review', req.params.id,
+        { class_id: review.class_id });
     }
     const { rows: [{ count }] } = await db.query(
       'SELECT count(*) FROM review_helpful WHERE review_id = $1', [req.params.id]

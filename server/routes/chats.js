@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { notify } = require('../notify');
 
 // Returns true if user can access chat; writes 403/404 to res and returns false otherwise.
 async function assertAccess(chatId, userId, res) {
@@ -116,6 +117,24 @@ router.get('/mine', auth, async (req, res, next) => {
       pending_requests: pendingCounts[c.id] ?? 0,
     }));
     res.json({ chats: enriched });
+  } catch (err) { next(err); }
+});
+
+// GET /api/chats/my-join-requests — pending requests the current user has sent (must come before /:id)
+router.get('/my-join-requests', auth, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT jr.id, jr.status, jr.created_at,
+         c.id AS chat_id, c.title AS chat_title, c.class_id,
+         cl.name AS class_name
+       FROM chat_join_requests jr
+       JOIN chats c ON c.id = jr.chat_id
+       LEFT JOIN classes cl ON cl.id = c.class_id
+       WHERE jr.user_id = $1 AND jr.status = 'pending'
+       ORDER BY jr.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ requests: rows });
   } catch (err) { next(err); }
 });
 
@@ -442,12 +461,17 @@ router.post('/:id/join-request', auth, async (req, res, next) => {
     );
     if (member) return res.status(400).json({ error: 'Already a member' });
 
+    const { rows: [chatFull] } = await db.query(
+      'SELECT id, title, class_id, created_by FROM chats WHERE id = $1', [req.params.id]
+    );
     await db.query(
       `INSERT INTO chat_join_requests (chat_id, user_id)
        VALUES ($1,$2)
        ON CONFLICT (chat_id, user_id) DO UPDATE SET status = 'pending', created_at = NOW()`,
       [chat.id, req.user.id]
     );
+    if (chatFull) notify(chatFull.created_by, req.user.id, 'join_request', 'chat', chat.id,
+      { chat_title: chatFull.title, class_id: chatFull.class_id });
     res.status(201).json({ status: 'pending' });
   } catch (err) { next(err); }
 });
@@ -480,7 +504,7 @@ router.patch('/:id/join-requests/:requestId', auth, async (req, res, next) => {
     return res.status(400).json({ error: 'action must be accept or deny' });
   }
   try {
-    const { rows: [chat] } = await db.query('SELECT created_by FROM chats WHERE id = $1', [req.params.id]);
+    const { rows: [chat] } = await db.query('SELECT created_by, title, class_id FROM chats WHERE id = $1', [req.params.id]);
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
     if (chat.created_by !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only the creator can respond to requests' });
@@ -497,6 +521,8 @@ router.patch('/:id/join-requests/:requestId', auth, async (req, res, next) => {
         [req.params.id, jr.user_id]
       );
     }
+    notify(jr.user_id, req.user.id, action === 'accept' ? 'join_accepted' : 'join_denied', 'chat', req.params.id,
+      { chat_title: chat.title, class_id: chat.class_id, chat_id: req.params.id });
     res.json({ status });
   } catch (err) { next(err); }
 });
