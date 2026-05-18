@@ -3,7 +3,7 @@ const db = require('../db');
 const auth = require('../middleware/auth');
 const requireAdmin = require('../middleware/requireAdmin');
 
-const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at';
+const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at, suspended_until, banned';
 
 // GET /api/users — admin only, list all users
 router.get('/', auth, requireAdmin, async (req, res, next) => {
@@ -33,6 +33,55 @@ async function withClasses(user) {
   const { rows } = await db.query('SELECT class_id FROM user_classes WHERE user_id = $1', [user.id]);
   return { ...user, classes: rows.map(r => r.class_id) };
 }
+
+// PATCH /api/users/:id/suspend — admin only, 72-hour suspension
+router.patch('/:id/suspend', auth, requireAdmin, async (req, res, next) => {
+  try {
+    const until = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    const { rows } = await db.query(
+      `UPDATE users SET suspended_until = $1 WHERE id = $2 AND NOT banned RETURNING ${USER_COLS}`,
+      [until, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found or is banned' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/users/:id/unsuspend — admin only
+router.patch('/:id/unsuspend', auth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET suspended_until = NULL WHERE id = $1 RETURNING ${USER_COLS}`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/users/:id/ban — admin only, permanent ban
+router.patch('/:id/ban', auth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET banned = true, suspended_until = NULL WHERE id = $1 RETURNING ${USER_COLS}`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/users/:id/unban — admin only
+router.patch('/:id/unban', auth, requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET banned = false WHERE id = $1 RETURNING ${USER_COLS}`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: rows[0] });
+  } catch (err) { next(err); }
+});
 
 // GET /api/users/search?q=name — search users by name (any authenticated user)
 router.get('/search', auth, async (req, res, next) => {

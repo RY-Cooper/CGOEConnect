@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const auth = require('../middleware/auth');
 
-const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at';
+const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at, suspended_until, banned';
 
 function signToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -22,8 +22,11 @@ router.post('/register', async (req, res, next) => {
     return res.status(400).json({ error: 'email, password, name, and program are required' });
   }
   try {
-    const exists = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (exists.rows.length) return res.status(409).json({ error: 'Email already registered' });
+    const exists = await db.query('SELECT id, banned FROM users WHERE email = $1', [email]);
+    if (exists.rows.length) {
+      if (exists.rows[0].banned) return res.status(403).json({ error: 'This email address is not eligible for registration.' });
+      return res.status(409).json({ error: 'Email already registered' });
+    }
 
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
@@ -48,6 +51,12 @@ router.post('/login', async (req, res, next) => {
     const { password_hash, ...rest } = rows[0];
     if (!await bcrypt.compare(password, password_hash)) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (rest.banned) {
+      return res.status(403).json({ error: 'Your account has been permanently banned.' });
+    }
+    if (rest.suspended_until && new Date(rest.suspended_until) > new Date()) {
+      return res.status(403).json({ error: `Your account is suspended until ${new Date(rest.suspended_until).toLocaleString()}.` });
     }
     const user = await withClasses(rest);
     res.json({ token: signToken(user), user });

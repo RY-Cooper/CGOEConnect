@@ -38,6 +38,7 @@ export default function ModDashboard() {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [roleUpdating, setRoleUpdating] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
 
   useEffect(() => {
     flagsAPI.list()
@@ -71,6 +72,71 @@ export default function ModDashboard() {
       showToast(err.message || "Failed to update role");
     } finally {
       setRoleUpdating(null);
+    }
+  }
+
+  function isSuspended(u) {
+    return u.suspended_until && new Date(u.suspended_until) > new Date();
+  }
+
+  function suspendedUntilStr(u) {
+    return new Date(u.suspended_until).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function patchUser(updated) {
+    setUsers((prev) => prev.map((u) => u.id === updated.id ? updated : u));
+  }
+
+  async function handleSuspend(userId) {
+    setActionLoading(userId);
+    try {
+      const { user } = await usersAPI.suspend(userId);
+      patchUser(user);
+      showToast("User suspended for 72 hours.");
+    } catch (err) {
+      showToast(err.message || "Failed to suspend user");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleUnsuspend(userId) {
+    setActionLoading(userId);
+    try {
+      const { user } = await usersAPI.unsuspend(userId);
+      patchUser(user);
+      showToast("Suspension lifted.");
+    } catch (err) {
+      showToast(err.message || "Failed to lift suspension");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleBan(userId, userName) {
+    if (!window.confirm(`Permanently ban ${userName}? They will not be able to log in or register again with the same email.`)) return;
+    setActionLoading(userId);
+    try {
+      const { user } = await usersAPI.ban(userId);
+      patchUser(user);
+      showToast("User permanently banned.");
+    } catch (err) {
+      showToast(err.message || "Failed to ban user");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleUnban(userId) {
+    setActionLoading(userId);
+    try {
+      const { user } = await usersAPI.unban(userId);
+      patchUser(user);
+      showToast("Ban lifted.");
+    } catch (err) {
+      showToast(err.message || "Failed to unban user");
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -174,32 +240,72 @@ export default function ModDashboard() {
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
-                {users.map((u) => (
-                  <li key={u.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
-                    <img
-                      src={u.profile_pic || `https://i.pravatar.cc/150?u=${u.id}`}
-                      alt={u.name}
-                      className="h-9 w-9 rounded-full object-cover shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-stone-900 truncate">{u.name}</p>
-                      <p className="text-xs text-stone-400 truncate">{u.email}</p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${ROLE_COLORS[u.role] ?? "bg-stone-100 text-stone-600"}`}>
-                      {u.role}
-                    </span>
-                    <select
-                      value={u.role}
-                      disabled={roleUpdating === u.id || u.id === currentUser?.id}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                      className="rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700 focus:border-[#8C1515] focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="student">Student</option>
-                      <option value="moderator">Moderator</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </li>
-                ))}
+                {users.map((u) => {
+                  const isSelf = u.id === currentUser?.id;
+                  const suspended = isSuspended(u);
+                  const busy = actionLoading === u.id || roleUpdating === u.id;
+                  return (
+                    <li key={u.id} className={`flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-sm ${u.banned ? "border-red-200 bg-red-50/30" : suspended ? "border-amber-200 bg-amber-50/30" : "border-stone-200"}`}>
+                      <img
+                        src={u.profile_pic || `https://i.pravatar.cc/150?u=${u.id}`}
+                        alt={u.name}
+                        className="h-9 w-9 rounded-full object-cover shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-stone-900 truncate">{u.name}</p>
+                        <p className="text-xs text-stone-400 truncate">{u.email}</p>
+                        {suspended && (
+                          <p className="text-xs text-amber-600 mt-0.5">Suspended until {suspendedUntilStr(u)}</p>
+                        )}
+                      </div>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${ROLE_COLORS[u.role] ?? "bg-stone-100 text-stone-600"}`}>
+                        {u.role}
+                      </span>
+                      {u.banned && (
+                        <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">Banned</span>
+                      )}
+                      {!u.banned && suspended && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">Suspended</span>
+                      )}
+                      <select
+                        value={u.role}
+                        disabled={busy || isSelf || u.banned}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                        className="rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs text-stone-700 focus:border-[#8C1515] focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="student">Student</option>
+                        <option value="moderator">Moderator</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      {!isSelf && (
+                        <div className="flex gap-1.5">
+                          {u.banned ? (
+                            <button type="button" disabled={busy} onClick={() => handleUnban(u.id)}
+                              className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50">
+                              Unban
+                            </button>
+                          ) : suspended ? (
+                            <button type="button" disabled={busy} onClick={() => handleUnsuspend(u.id)}
+                              className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50">
+                              Lift suspension
+                            </button>
+                          ) : (
+                            <button type="button" disabled={busy} onClick={() => handleSuspend(u.id)}
+                              className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50">
+                              Suspend 72h
+                            </button>
+                          )}
+                          {!u.banned && (
+                            <button type="button" disabled={busy} onClick={() => handleBan(u.id, u.name)}
+                              className="rounded-lg border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50">
+                              Ban
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

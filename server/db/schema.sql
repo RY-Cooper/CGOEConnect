@@ -13,7 +13,9 @@ CREATE TABLE IF NOT EXISTS users (
   agreed_to_guidelines BOOLEAN NOT NULL DEFAULT false,
   modality_tags TEXT[] NOT NULL DEFAULT '{}',
   identity_tags TEXT[] NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  suspended_until TIMESTAMPTZ DEFAULT NULL,
+  banned BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS classes (
@@ -168,3 +170,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC);
+
+-- Migrations for existing databases
+ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT false;
