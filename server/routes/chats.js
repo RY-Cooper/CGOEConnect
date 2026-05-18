@@ -335,7 +335,18 @@ router.post('/:chatId/messages', auth, async (req, res, next) => {
 
     await client.query('COMMIT');
 
-    const { rows: [author] } = await db.query('SELECT name, profile_pic, role, timezone FROM users WHERE id = $1', [req.user.id]);
+    const [{ rows: [author] }, { rows: [chat] }] = await Promise.all([
+      db.query('SELECT name, profile_pic, role, timezone FROM users WHERE id = $1', [req.user.id]),
+      db.query('SELECT created_by, title, class_id FROM chats WHERE id = $1', [chatId]),
+    ]);
+
+    // Notify the chat creator that someone posted — use chat as entity so multiple
+    // messages from the same person collapse into one unread notification.
+    if (chat) {
+      notify(chat.created_by, req.user.id, 'new_message', 'chat', chatId,
+        { chat_id: chatId, chat_title: chat.title, class_id: chat.class_id });
+    }
+
     res.status(201).json({
       message: { ...msg, author_name: author.name, author_pic: author.profile_pic, author_role: author.role,
         author_timezone: author.timezone ?? '',
