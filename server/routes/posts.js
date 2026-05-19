@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const requireModerator = require('../middleware/requireModerator');
 const { notify } = require('../notify');
 
 function postQuery(extraWhere, params, currentUserId) {
@@ -16,7 +17,7 @@ function postQuery(extraWhere, params, currentUserId) {
      FROM posts p
      LEFT JOIN users u ON u.id = p.author_id
      ${extraWhere}
-     ORDER BY p.created_at DESC`,
+     ORDER BY p.pinned DESC, p.created_at DESC`,
     [...params, currentUserId]
   );
 }
@@ -41,7 +42,7 @@ router.get('/', auth, async (req, res, next) => {
        FROM posts p
        LEFT JOIN users u ON u.id = p.author_id
        WHERE p.class_id IS NULL OR p.class_id = ANY($2::text[])
-       ORDER BY p.created_at DESC`,
+       ORDER BY p.pinned DESC, p.created_at DESC`,
       [req.user.id, classIds]
     );
     res.json({ posts: rows });
@@ -179,6 +180,19 @@ router.delete('/:id', auth, async (req, res, next) => {
     await db.query("DELETE FROM flags WHERE target_type='post' AND target_id=$1", [req.params.id]);
     await db.query('DELETE FROM posts WHERE id=$1', [req.params.id]);
     res.status(204).send();
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/posts/:id/pin — mod or admin, toggles pinned
+router.patch('/:id/pin', auth, requireModerator, async (req, res, next) => {
+  try {
+    const { rows: [post] } = await db.query('SELECT pinned FROM posts WHERE id = $1', [req.params.id]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const { rows: [updated] } = await db.query(
+      'UPDATE posts SET pinned = $1 WHERE id = $2 RETURNING id, pinned',
+      [!post.pinned, req.params.id]
+    );
+    res.json({ post: updated });
   } catch (err) { next(err); }
 });
 

@@ -96,7 +96,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, savedIds, upvotedIds, reportedIds, showComments, onToggleComments }) {
+function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, onPin, savedIds, upvotedIds, reportedIds, showComments, onToggleComments, isModOrAdmin }) {
   const [comments, setComments] = useState(null);
   const [newComment, setNewComment] = useState("");
 
@@ -126,7 +126,15 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, saved
   const commentCount = comments?.length ?? Number(post.comment_count ?? 0);
 
   return (
-    <article id={`post-${post.id}`} className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+    <article id={`post-${post.id}`} className={`rounded-2xl border bg-white shadow-sm overflow-hidden ${post.pinned ? "border-[#8C1515]/30" : "border-stone-200"}`}>
+      {post.pinned && (
+        <div className="flex items-center gap-1.5 border-b border-[#8C1515]/10 bg-[#8C1515]/5 px-5 py-1.5">
+          <svg className="h-3 w-3 text-[#8C1515]" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 3a1 1 0 0 1 .707 1.707L13 8.414V15l2 2v1H9v-1l2-2V8.414L7.293 4.707A1 1 0 0 1 8 3h8z"/>
+          </svg>
+          <span className="text-xs font-semibold text-[#8C1515]">Pinned</span>
+        </div>
+      )}
       <div className="p-5">
         <div className="flex items-center gap-3 mb-3">
           <img
@@ -196,6 +204,19 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, saved
             {isSaved ? "Saved" : "Save"}
           </button>
 
+          {isModOrAdmin && (
+            <button
+              type="button"
+              onClick={() => onPin(post.id)}
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${post.pinned ? "text-[#8C1515] hover:bg-[#8C1515]/10" : "text-stone-400 hover:bg-stone-100"}`}
+              title={post.pinned ? "Unpin post" : "Pin post to top"}
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 3a1 1 0 0 1 .707 1.707L13 8.414V15l2 2v1H9v-1l2-2V8.414L7.293 4.707A1 1 0 0 1 8 3h8z"/>
+              </svg>
+              {post.pinned ? "Unpin" : "Pin"}
+            </button>
+          )}
           {post.author_id === currentUser?.id ? (
             <button
               type="button"
@@ -277,6 +298,7 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, saved
 export default function Feed() {
   const { selectedClassIds, setSelectedClassIds, currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin";
+  const isModOrAdmin = isAdmin || currentUser?.role === "moderator";
 
   const [feedPosts, setFeedPosts] = useState([]);
   const [catalogClasses, setCatalogClasses] = useState([]);
@@ -384,6 +406,32 @@ export default function Feed() {
     try { await postsAPI.flag(postId, "Reported by user"); } catch { /* ignore */ }
   }
 
+  async function handlePin(postId) {
+    try {
+      const { post: updated } = await postsAPI.pin(postId);
+      setFeedPosts((prev) => {
+        const next = prev.map((p) => p.id === postId ? { ...p, pinned: updated.pinned } : p);
+        return [...next].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.created_at) - new Date(a.created_at));
+      });
+      showToast(updated.pinned ? "Post pinned to top." : "Post unpinned.");
+    } catch (err) {
+      showToast(err.message || "Failed to pin post");
+    }
+  }
+
+  async function handleChatPin(chatId) {
+    try {
+      const { chat: updated } = await chatsAPI.pin(chatId);
+      setMySubchats((prev) => {
+        const next = prev.map((c) => c.id === chatId ? { ...c, pinned: updated.pinned } : c);
+        return [...next].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.created_at) - new Date(a.created_at));
+      });
+      showToast(updated.pinned ? "Subchat pinned to top." : "Subchat unpinned.");
+    } catch (err) {
+      showToast(err.message || "Failed to pin subchat");
+    }
+  }
+
   function toggleComments(postId) {
     setOpenCommentIds((prev) => {
       const next = new Set(prev);
@@ -444,27 +492,46 @@ export default function Feed() {
                 {mySubchats.slice(0, 10).map((chat) => {
                   const isNew = hasNewActivity(chat);
                   return (
-                    <li key={chat.id}>
-                      <Link
-                        to={`/class/${encodeURIComponent(chat.class_id)}/subchat/${chat.id}`}
-                        onClick={() => markVisited(chat.id)}
-                        className="group flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-stone-50"
-                      >
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${isNew ? "bg-emerald-500" : "bg-stone-300"}`} />
-                        <span className="min-w-0 flex-1 truncate font-medium text-stone-700 group-hover:text-[#8C1515]">
-                          {chat.title}
-                        </span>
-                        {chat.is_private && (
-                          <svg className="h-3 w-3 shrink-0 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                          </svg>
-                        )}
-                        {Boolean(chat.pending_requests) && (
-                          <span className="shrink-0 rounded-full bg-[#8C1515] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
-                            {chat.pending_requests}
+                    <li key={chat.id} className="group/item">
+                      <div className="flex items-center gap-1">
+                        <Link
+                          to={`/class/${encodeURIComponent(chat.class_id)}/subchat/${chat.id}`}
+                          onClick={() => markVisited(chat.id)}
+                          className="group min-w-0 flex-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-stone-50"
+                        >
+                          {chat.pinned ? (
+                            <svg className="h-2.5 w-2.5 shrink-0 text-[#8C1515]" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M16 4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v1H8a1 1 0 0 0-.707 1.707L9 8.414V13l-3 3v2h5v5h2v-5h5v-2l-3-3V8.414l1.707-1.707A1 1 0 0 0 16 5V4z"/>
+                            </svg>
+                          ) : (
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${isNew ? "bg-emerald-500" : "bg-stone-300"}`} />
+                          )}
+                          <span className="min-w-0 flex-1 truncate font-medium text-stone-700 group-hover:text-[#8C1515]">
+                            {chat.title}
                           </span>
+                          {chat.is_private && (
+                            <svg className="h-3 w-3 shrink-0 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                          )}
+                          {Boolean(chat.pending_requests) && (
+                            <span className="shrink-0 rounded-full bg-[#8C1515] px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+                              {chat.pending_requests}
+                            </span>
+                          )}
+                        </Link>
+                        {isModOrAdmin && (
+                          <button
+                            onClick={() => handleChatPin(chat.id)}
+                            title={chat.pinned ? "Unpin subchat" : "Pin subchat"}
+                            className={`shrink-0 rounded p-1 opacity-0 group-hover/item:opacity-100 transition-opacity ${chat.pinned ? "text-[#8C1515]" : "text-stone-300 hover:text-[#8C1515]"}`}
+                          >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M16 4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v1H8a1 1 0 0 0-.707 1.707L9 8.414V13l-3 3v2h5v5h2v-5h5v-2l-3-3V8.414l1.707-1.707A1 1 0 0 0 16 5V4z"/>
+                            </svg>
+                          </button>
                         )}
-                      </Link>
+                      </div>
                       {chat.class_name && (
                         <p className="ml-7 truncate text-xs text-stone-400">{chat.class_name}</p>
                       )}
@@ -550,6 +617,8 @@ export default function Feed() {
                   onSave={handleSave}
                   onFlag={handleFlag}
                   onDelete={handleDelete}
+                  onPin={handlePin}
+                  isModOrAdmin={isModOrAdmin}
                   savedIds={savedIds}
                   upvotedIds={upvotedIds}
                   reportedIds={reportedPostIds}

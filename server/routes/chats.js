@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const requireModerator = require('../middleware/requireModerator');
 const { notify } = require('../notify');
 
 // Returns true if user can access chat; writes 403/404 to res and returns false otherwise.
@@ -77,7 +78,7 @@ router.get('/mine', auth, async (req, res, next) => {
          WHERE (c.created_by = $1 OR cm.user_id = $1)
            AND (c.is_channel = false OR c.is_channel IS NULL)
            AND c.class_id IS NOT NULL
-         ORDER BY c.created_at DESC`,
+         ORDER BY c.pinned DESC, c.created_at DESC`,
         [req.user.id]
       );
       rows = result.rows;
@@ -285,6 +286,19 @@ router.delete('/:id', auth, async (req, res, next) => {
     if (!isAdmin && !isCreator) return res.status(403).json({ error: 'Forbidden' });
     await db.query('DELETE FROM chats WHERE id = $1', [req.params.id]);
     res.status(204).send();
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/chats/:id/pin — mod or admin, toggles pinned
+router.patch('/:id/pin', auth, requireModerator, async (req, res, next) => {
+  try {
+    const { rows: [chat] } = await db.query('SELECT pinned FROM chats WHERE id = $1', [req.params.id]);
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+    const { rows: [updated] } = await db.query(
+      'UPDATE chats SET pinned = $1 WHERE id = $2 RETURNING id, pinned',
+      [!chat.pinned, req.params.id]
+    );
+    res.json({ chat: updated });
   } catch (err) { next(err); }
 });
 
