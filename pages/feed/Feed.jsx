@@ -537,7 +537,7 @@ export default function Feed() {
         setFeedPosts(posts);
         setUpvotedIds(new Set(posts.filter((p) => p.upvoted).map((p) => p.id)));
         setSavedIds(new Set(posts.filter((p) => p.saved).map((p) => p.id)));
-        setCatalogClasses(classes);
+        setCatalogClasses([...classes].sort((a, b) => a.name.localeCompare(b.name)));
         setMySubchats(chats);
       })
       .catch(() => {})
