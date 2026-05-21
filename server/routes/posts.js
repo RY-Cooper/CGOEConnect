@@ -38,7 +38,19 @@ router.get('/', auth, async (req, res, next) => {
          (SELECT count(*) FROM post_upvotes WHERE post_id = p.id)                      AS upvotes,
          EXISTS(SELECT 1 FROM post_upvotes WHERE post_id = p.id AND user_id = $1)      AS upvoted,
          (SELECT count(*) FROM comments    WHERE post_id = p.id)                      AS comment_count,
-         EXISTS(SELECT 1 FROM saved_posts  WHERE post_id = p.id AND user_id = $1)      AS saved
+         EXISTS(SELECT 1 FROM saved_posts  WHERE post_id = p.id AND user_id = $1)      AS saved,
+         (SELECT json_build_object(
+           'id', pp.id,
+           'question', pp.question,
+           'voted_option_id', (SELECT option_id FROM post_poll_votes WHERE poll_id = pp.id AND user_id = $1),
+           'options', (
+             SELECT json_agg(json_build_object(
+               'id', po.id, 'text', po.text, 'display_order', po.display_order,
+               'votes', (SELECT count(*) FROM post_poll_votes WHERE option_id = po.id)
+             ) ORDER BY po.display_order)
+             FROM post_poll_options po WHERE po.poll_id = pp.id
+           )
+         ) FROM post_polls pp WHERE pp.post_id = p.id)                                 AS poll
        FROM posts p
        LEFT JOIN users u ON u.id = p.author_id
        WHERE p.class_id IS NULL OR p.class_id = ANY($2::text[])
@@ -51,20 +63,46 @@ router.get('/', auth, async (req, res, next) => {
 
 // POST /api/posts
 router.post('/', auth, async (req, res, next) => {
-  const { content, class_id, chat_id } = req.body;
-  if (!content) return res.status(400).json({ error: 'content is required' });
+  const { content, class_id, chat_id, image_url, poll } = req.body;
+  if (!content && !image_url && !poll) return res.status(400).json({ error: 'content is required' });
+  const client = await db.connect();
   try {
-    const { rows: [post] } = await db.query(
-      `INSERT INTO posts (author_id, class_id, chat_id, content) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [req.user.id, class_id || null, chat_id || null, content]
+    await client.query('BEGIN');
+    const { rows: [post] } = await client.query(
+      `INSERT INTO posts (author_id, class_id, chat_id, content, image_url) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, class_id || null, chat_id || null, content || '', image_url || null]
     );
+    let pollData = null;
+    if (poll && poll.question && Array.isArray(poll.options) && poll.options.length >= 2) {
+      const { rows: [pp] } = await client.query(
+        'INSERT INTO post_polls (post_id, question) VALUES ($1,$2) RETURNING id',
+        [post.id, poll.question]
+      );
+      for (let i = 0; i < poll.options.length; i++) {
+        await client.query(
+          'INSERT INTO post_poll_options (poll_id, text, display_order) VALUES ($1,$2,$3)',
+          [pp.id, poll.options[i], i]
+        );
+      }
+      const { rows: opts } = await client.query(
+        `SELECT id, text, display_order, 0 AS votes FROM post_poll_options WHERE poll_id = $1 ORDER BY display_order`,
+        [pp.id]
+      );
+      pollData = { id: pp.id, question: poll.question, voted_option_id: null, options: opts };
+    }
+    await client.query('COMMIT');
     const { rows: [author] } = await db.query('SELECT name, profile_pic, timezone FROM users WHERE id = $1', [req.user.id]);
     res.status(201).json({
       post: { ...post, author_name: author.name, author_pic: author.profile_pic,
         author_timezone: author.timezone ?? '',
-        upvotes: 0, upvoted: false, comment_count: 0, saved: false },
+        upvotes: 0, upvoted: false, comment_count: 0, saved: false, poll: pollData },
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // POST /api/posts/:id/upvote  — toggle
@@ -163,6 +201,30 @@ router.post('/:id/comments', auth, async (req, res, next) => {
     if (post) notify(post.author_id, req.user.id, 'comment', 'post', req.params.id,
       { class_id: post.class_id, chat_id: post.chat_id });
     res.status(201).json({ comment: { ...comment, author_name: author.name, author_pic: author.profile_pic } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/posts/:id/vote  { optionId }
+router.post('/:id/vote', auth, async (req, res, next) => {
+  const { optionId } = req.body;
+  if (!optionId) return res.status(400).json({ error: 'optionId is required' });
+  try {
+    const { rows: [poll] } = await db.query(
+      'SELECT id FROM post_polls WHERE post_id = $1', [req.params.id]
+    );
+    if (!poll) return res.status(404).json({ error: 'No poll on this post' });
+    await db.query(
+      `INSERT INTO post_poll_votes (poll_id, option_id, user_id) VALUES ($1,$2,$3)
+       ON CONFLICT (poll_id, user_id) DO UPDATE SET option_id = $2`,
+      [poll.id, optionId, req.user.id]
+    );
+    const { rows: options } = await db.query(
+      `SELECT po.id, po.text, po.display_order,
+         (SELECT count(*) FROM post_poll_votes WHERE option_id = po.id) AS votes
+       FROM post_poll_options po WHERE po.poll_id = $1 ORDER BY po.display_order`,
+      [poll.id]
+    );
+    res.json({ options, voted_option_id: optionId });
   } catch (err) { next(err); }
 });
 

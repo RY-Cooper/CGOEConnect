@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { classesAPI, postsAPI, chatsAPI, feedbackAPI } from "../../api";
+import { uploadImage } from "../../utils/cloudinary";
 import TopNav from "../../components/TopNav";
 
 function AdminClassItem({ cls, onDelete }) {
@@ -44,15 +45,73 @@ function AdminClassItem({ cls, onDelete }) {
 function PostComposer({ currentUser, onPost }) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [imgPreview, setImgPreview] = useState(null);
+  const [imgUrl, setImgUrl] = useState(null);
+  const [imgUploading, setImgUploading] = useState(false);
+  const [imgError, setImgError] = useState(null);
+  const [showPoll, setShowPoll] = useState(false);
+  const [pollQ, setPollQ] = useState("");
+  const [pollOpts, setPollOpts] = useState(["", ""]);
+  const fileRef = useRef(null);
+
+  async function handleImg(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setImgError("File too large — maximum 10 MB.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    setImgPreview(URL.createObjectURL(file));
+    setImgUrl(null);
+    setImgError(null);
+    setImgUploading(true);
+    try {
+      const url = await uploadImage(file);
+      setImgUrl(url);
+    } catch (err) {
+      setImgPreview(null);
+      setImgError(err.message || "Image upload failed.");
+    } finally {
+      setImgUploading(false);
+    }
+  }
+
+  function removeImg() {
+    setImgPreview(null);
+    setImgUrl(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function togglePoll() {
+    setShowPoll((v) => !v);
+    setPollQ("");
+    setPollOpts(["", ""]);
+  }
+
+  const canSubmit = !submitting && !imgUploading && (
+    text.trim() || (imgUrl) ||
+    (showPoll && pollQ.trim() && pollOpts.filter((o) => o.trim()).length >= 2)
+  );
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!text.trim() || submitting) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { post } = await postsAPI.create({ content: text.trim() });
+      const payload = {
+        content: text.trim(),
+        image_url: imgUrl || null,
+        poll: showPoll && pollQ.trim()
+          ? { question: pollQ.trim(), options: pollOpts.filter((o) => o.trim()) }
+          : null,
+      };
+      const { post } = await postsAPI.create(payload);
       onPost(post);
       setText("");
+      setImgPreview(null); setImgUrl(null);
+      if (fileRef.current) fileRef.current.value = "";
+      setShowPoll(false); setPollQ(""); setPollOpts(["", ""]);
     } catch { /* ignore */ } finally {
       setSubmitting(false);
     }
@@ -60,6 +119,9 @@ function PostComposer({ currentUser, onPost }) {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm mb-6">
+      {imgError && (
+        <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{imgError}</div>
+      )}
       <div className="flex gap-3">
         <img
           src={currentUser?.profilePic || `https://i.pravatar.cc/150?u=${currentUser?.id}`}
@@ -69,21 +131,140 @@ function PostComposer({ currentUser, onPost }) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Share something with the community…"
+          placeholder={showPoll ? "Add context for your poll (optional)…" : "Share something with the community…"}
           rows={2}
           className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-[#8C1515] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8C1515]/20 transition"
         />
       </div>
-      <div className="mt-3 flex justify-end">
+
+      {imgPreview && (
+        <div className="mt-3 relative inline-block">
+          <img src={imgPreview} alt="Preview" className={`max-h-48 rounded-xl border border-stone-200 object-cover ${imgUploading ? "opacity-50" : ""}`} />
+          {imgUploading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-[#8C1515]" />
+            </div>
+          )}
+          <button type="button" onClick={removeImg}
+            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-stone-800 text-white shadow hover:bg-stone-900">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {showPoll && (
+        <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">Poll</p>
+          <input
+            type="text"
+            value={pollQ}
+            onChange={(e) => setPollQ(e.target.value)}
+            placeholder="Ask a question…"
+            className="mb-3 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm focus:border-[#8C1515] focus:outline-none focus:ring-2 focus:ring-[#8C1515]/20"
+          />
+          <div className="flex flex-col gap-2">
+            {pollOpts.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={(e) => { const n = [...pollOpts]; n[i] = e.target.value; setPollOpts(n); }}
+                  placeholder={`Option ${i + 1}`}
+                  className="flex-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm focus:border-[#8C1515] focus:outline-none"
+                />
+                {pollOpts.length > 2 && (
+                  <button type="button" onClick={() => setPollOpts((p) => p.filter((_, idx) => idx !== i))}
+                    className="text-stone-400 hover:text-red-500 transition-colors">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {pollOpts.length < 6 && (
+            <button type="button" onClick={() => setPollOpts((p) => [...p, ""])}
+              className="mt-2 text-xs font-medium text-[#8C1515] hover:underline">
+              + Add option
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center gap-2">
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImg} id="feed-img-upload" />
+        <label htmlFor="feed-img-upload"
+          className={`flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${imgPreview ? "bg-sky-100 text-sky-700" : "text-stone-500 hover:bg-stone-100"}`}>
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          Image
+        </label>
+        <button type="button" onClick={togglePoll}
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${showPoll ? "bg-violet-100 text-violet-700" : "text-stone-500 hover:bg-stone-100"}`}>
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          Poll
+        </button>
+        <div className="flex-1" />
         <button
           type="submit"
-          disabled={!text.trim() || submitting}
+          disabled={!canSubmit}
           className="rounded-xl bg-[#8C1515] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6f1010] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Posting…" : "Post"}
         </button>
       </div>
     </form>
+  );
+}
+
+function PostPollDisplay({ poll, postId, userId, onVote }) {
+  const total = (poll.options || []).reduce((s, o) => s + Number(o.votes), 0);
+  const voted = poll.voted_option_id != null;
+
+  return (
+    <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+      <p className="mb-3 text-sm font-semibold text-stone-800">{poll.question}</p>
+      <div className="flex flex-col gap-2">
+        {(poll.options || []).map((opt) => {
+          const pct = total > 0 ? Math.round((Number(opt.votes) / total) * 100) : 0;
+          const isMyVote = poll.voted_option_id === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={voted}
+              onClick={() => !voted && onVote(postId, opt.id)}
+              className={`relative overflow-hidden rounded-lg border px-3 py-2.5 text-left text-sm transition-all
+                ${isMyVote
+                  ? "border-[#8C1515]/40 bg-[#8C1515]/5"
+                  : voted
+                    ? "border-stone-200 bg-white text-stone-500 cursor-default"
+                    : "border-stone-200 bg-white text-stone-700 hover:border-[#8C1515]/30 hover:bg-[#8C1515]/5 cursor-pointer"
+                }`}
+            >
+              {voted && (
+                <span className="absolute inset-y-0 left-0 bg-[#8C1515]/8 transition-all" style={{ width: `${pct}%` }} />
+              )}
+              <span className="relative flex items-center justify-between gap-4">
+                <span className={`font-medium ${isMyVote ? "text-[#8C1515]" : ""}`}>
+                  {isMyVote && "✓ "}{opt.text}
+                </span>
+                {voted && <span className="shrink-0 text-xs text-stone-400">{pct}%</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs text-stone-400">
+        {total} vote{total !== 1 ? "s" : ""}{!voted && " · click to vote"}
+      </p>
+    </div>
   );
 }
 
@@ -96,7 +277,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, onPin, savedIds, upvotedIds, reportedIds, showComments, onToggleComments, isModOrAdmin }) {
+function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, onPin, onVote, savedIds, upvotedIds, reportedIds, showComments, onToggleComments, isModOrAdmin }) {
   const [comments, setComments] = useState(null);
   const [newComment, setNewComment] = useState("");
 
@@ -162,7 +343,26 @@ function PostCard({ post, currentUser, onUpvote, onSave, onFlag, onDelete, onPin
           )}
         </div>
 
-        <p className="text-sm text-stone-700 leading-relaxed">{post.content}</p>
+        {post.content && (
+          <p className="text-sm text-stone-700 leading-relaxed">{post.content}</p>
+        )}
+
+        {post.image_url && (
+          <img
+            src={post.image_url}
+            alt=""
+            className="mt-3 max-h-96 w-full rounded-xl object-cover border border-stone-100"
+          />
+        )}
+
+        {post.poll && (
+          <PostPollDisplay
+            poll={post.poll}
+            postId={post.id}
+            userId={currentUser?.id}
+            onVote={onVote}
+          />
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-1">
           <button
@@ -406,6 +606,19 @@ export default function Feed() {
     try { await postsAPI.flag(postId, "Reported by user"); } catch { /* ignore */ }
   }
 
+  async function handleVote(postId, optionId) {
+    try {
+      const { options, voted_option_id } = await postsAPI.vote(postId, optionId);
+      setFeedPosts((prev) => prev.map((p) =>
+        p.id === postId && p.poll
+          ? { ...p, poll: { ...p.poll, options, voted_option_id } }
+          : p
+      ));
+    } catch (err) {
+      showToast(err.message || "Failed to record vote");
+    }
+  }
+
   async function handlePin(postId) {
     try {
       const { post: updated } = await postsAPI.pin(postId);
@@ -589,7 +802,7 @@ export default function Feed() {
         <div className="min-w-0">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-stone-900">Home feed</h1>
-            <p className="mt-1 text-sm text-stone-500">Latest posts from the CGOE community.</p>
+            <p className="mt-1 text-sm text-stone-500">Latest posts from the CGOE community about all things CGOE-related.</p>
           </div>
 
           <PostComposer currentUser={currentUser} onPost={(post) => setFeedPosts((prev) => [post, ...prev])} />
@@ -618,6 +831,7 @@ export default function Feed() {
                   onFlag={handleFlag}
                   onDelete={handleDelete}
                   onPin={handlePin}
+                  onVote={handleVote}
                   isModOrAdmin={isModOrAdmin}
                   savedIds={savedIds}
                   upvotedIds={upvotedIds}

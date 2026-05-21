@@ -105,9 +105,30 @@ CREATE TABLE IF NOT EXISTS posts (
   class_id TEXT REFERENCES classes(id) ON DELETE SET NULL,
   chat_id UUID REFERENCES chats(id) ON DELETE SET NULL,
   content TEXT NOT NULL,
+  image_url TEXT,
   flagged BOOLEAN NOT NULL DEFAULT false,
   pinned BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS post_polls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID UNIQUE NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  question TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS post_poll_options (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  poll_id UUID NOT NULL REFERENCES post_polls(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  display_order INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS post_poll_votes (
+  poll_id UUID NOT NULL REFERENCES post_polls(id) ON DELETE CASCADE,
+  option_id UUID NOT NULL REFERENCES post_poll_options(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (poll_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS post_upvotes (
@@ -194,3 +215,21 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open'
   CHECK (status IN ('open', 'in_progress', 'resolved', 'rejected'));
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+CREATE TABLE IF NOT EXISTS post_polls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID UNIQUE NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  question TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS post_poll_options (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  poll_id UUID NOT NULL REFERENCES post_polls(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  display_order INT NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS post_poll_votes (
+  poll_id UUID NOT NULL REFERENCES post_polls(id) ON DELETE CASCADE,
+  option_id UUID NOT NULL REFERENCES post_poll_options(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (poll_id, user_id)
+);
