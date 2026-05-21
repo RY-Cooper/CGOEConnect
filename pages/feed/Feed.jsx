@@ -851,41 +851,14 @@ export default function Feed() {
           <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-stone-700">Courses</h2>
-              {isAdmin && (
+              {isModOrAdmin && (
                 <Link to="/admin/classes" className="text-xs font-medium text-[#8C1515] hover:underline">
                   Manage
                 </Link>
               )}
             </div>
 
-            {isAdmin ? (
-              /* Admin sees all catalog classes with delete option */
-              catalogClasses.length === 0 ? (
-                <p className="py-3 text-center text-xs text-stone-400">No classes yet.</p>
-              ) : (
-                <>
-                  <ul className="flex flex-col gap-1">
-                    {(showAllClasses ? catalogClasses : catalogClasses.slice(0, CLASS_LIMIT)).map((cls) => (
-                      <AdminClassItem
-                        key={cls.id}
-                        cls={cls}
-                        onDelete={(id) => setCatalogClasses((prev) => prev.filter((c) => c.id !== id))}
-                      />
-                    ))}
-                  </ul>
-                  {catalogClasses.length > CLASS_LIMIT && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllClasses((v) => !v)}
-                      className="mt-2 w-full rounded-lg py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-50 hover:text-[#8C1515] transition-colors"
-                    >
-                      {showAllClasses ? "Show less" : `Show ${catalogClasses.length - CLASS_LIMIT} more`}
-                    </button>
-                  )}
-                </>
-              )
-            ) : (
-              /* Regular users: enrolled courses + full catalog to add from */
+            {(
               <>
                 {/* Enrolled courses */}
                 {hubs.length > 0 && (
