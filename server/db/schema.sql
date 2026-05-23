@@ -216,6 +216,14 @@ CREATE TABLE IF NOT EXISTS feedback (
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open'
   CHECK (status IN ('open', 'in_progress', 'resolved', 'rejected'));
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT;
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 CREATE TABLE IF NOT EXISTS post_polls (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID UNIQUE NOT NULL REFERENCES posts(id) ON DELETE CASCADE,

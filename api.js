@@ -26,9 +26,11 @@ async function req(method, path, body) {
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  login:    (email, password)              => req('POST', '/auth/login',    { email, password }),
-  register: (email, password, name, program) => req('POST', '/auth/register', { email, password, name, program }),
-  me:       ()                             => req('GET',  '/auth/me'),
+  login:          (email, password)              => req('POST', '/auth/login',           { email, password }),
+  register:       (email, password, name, program) => req('POST', '/auth/register',        { email, password, name, program }),
+  me:             ()                             => req('GET',  '/auth/me'),
+  forgotPassword: (email)                        => req('POST', '/auth/forgot-password',   { email }),
+  resetPassword:  (token, password)              => req('POST', '/auth/reset-password',    { token, password }),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────

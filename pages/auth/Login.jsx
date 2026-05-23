@@ -54,6 +54,12 @@ export default function Login() {
 
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-xs text-stone-500 hover:text-[#8C1515] hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit" disabled={loading}
             className="w-full rounded-lg bg-[#8C1515] px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-[#6f1010] transition-colors disabled:opacity-50"
