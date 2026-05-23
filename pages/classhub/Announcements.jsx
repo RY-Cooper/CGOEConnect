@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { classesAPI } from "../../api";
+import TopNav from "../../components/TopNav";
 
 const BOARD_BY_CLASS = {
   cs229: [
@@ -79,33 +80,33 @@ export default function Announcements() {
   }, [classId]);
 
   return (
-    <div className="min-h-screen bg-[#f6f1e7] px-4 py-10">
-      <div className="mx-auto max-w-5xl">
+    <div className="min-h-screen bg-stone-50">
+      <TopNav />
+      <div className="mx-auto max-w-5xl px-4 py-10">
         <Link to={base} className="text-sm font-medium text-[#8C1515] hover:underline">
           ← Back to hub
         </Link>
 
-        <div className="mt-6 rounded-sm border-2 border-amber-900/30 bg-[#fffdf8] p-6 shadow-md">
-          <div className="border-b-2 border-dashed border-amber-900/20 pb-4 mb-6">
-            <h1 className="font-serif text-2xl font-bold text-amber-950 tracking-tight">
-              {className ?? "Class"} — Announcements
-            </h1>
-            <p className="mt-1 text-sm text-amber-900/70">
-              Posted by <strong>community moderators</strong> — peer volunteers, not instructors or Stanford course staff.
-            </p>
-          </div>
-
-          <ul className="space-y-6">
-            {items.map((item) => (
-              <li key={item.title + item.date} className="relative border-l-4 border-[#8C1515] pl-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/60">{item.date}</p>
-                <h2 className="mt-1 text-lg font-semibold text-stone-900">{item.title}</h2>
-                <p className="mt-2 text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{item.body}</p>
-                <p className="mt-3 text-xs font-medium text-[#8C1515]">— {item.moderatorName}, moderator</p>
-              </li>
-            ))}
-          </ul>
+        <div className="mt-6 border-b border-stone-200 pb-5 mb-6">
+          <h1 className="text-2xl font-semibold text-stone-900">
+            Announcements
+            {className && <span className="block text-base font-normal text-stone-500 mt-1">{className}</span>}
+          </h1>
+          <p className="mt-2 text-sm text-stone-500">
+            Posted by <strong>community moderators</strong> — peer volunteers, not instructors or Stanford course staff.
+          </p>
         </div>
+
+        <ul className="space-y-4">
+          {items.map((item) => (
+            <li key={item.title + item.date} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">{item.date}</p>
+              <h2 className="mt-1 text-lg font-semibold text-stone-900">{item.title}</h2>
+              <p className="mt-2 text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{item.body}</p>
+              <p className="mt-3 text-xs font-medium text-[#8C1515]">— {item.moderatorName}, moderator</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
