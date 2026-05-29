@@ -2,17 +2,28 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const db = require('../db');
 const auth = require('../middleware/auth');
 
-const mailer = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
-});
+async function sendEmail({ to, subject, html }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'CGOEConnect', email: process.env.BREVO_SENDER },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `Brevo error ${res.status}`);
+  }
+}
 
 const USER_COLS = 'id, email, name, bio, profile_pic, program, student_status, role, agreed_to_guidelines, modality_tags, identity_tags, timezone, created_at, suspended_until, banned';
 
@@ -97,8 +108,7 @@ router.post('/forgot-password', async (req, res, next) => {
     const appUrl = process.env.APP_URL || 'http://localhost:5173';
     const resetUrl = `${appUrl}/reset-password?token=${token}`;
 
-    await mailer.sendMail({
-      from: `CGOEConnect <${process.env.GMAIL_USER}>`,
+    await sendEmail({
       to: email,
       subject: 'Reset your CGOEConnect password',
       html: `
